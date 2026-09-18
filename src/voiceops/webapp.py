@@ -306,7 +306,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/telemetry":
             from .governed_tools import inspect_operational_state
-            self._send_json(inspect_operational_state("all"))
+            self._send_json(inspect_operational_state("all", live_fluctuation=True))
             return
         if self.path == "/api/boson/status":
             has_key = bool(os.getenv("BOSON_API_KEY") or os.getenv("HIGGS_API_KEY"))

@@ -991,6 +991,17 @@ body {
 }
 
 /* Subsystem Cards */
+.telemetry-sync-ticker {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
 .subsystems-list {
   display: flex;
   flex-direction: column;

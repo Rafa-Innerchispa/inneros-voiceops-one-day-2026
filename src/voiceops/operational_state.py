@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import secrets
 import time
 from dataclasses import asdict, dataclass, field
@@ -30,8 +31,19 @@ class OperationalStateRegistry:
     _evidence_events: list[EvidenceEvent] = field(default_factory=list)
     _permit_manager: VoiceExecutionPermitManager = field(default_factory=VoiceExecutionPermitManager)
 
-    def get_subsystem_telemetry(self, subsystem: str = "all") -> dict[str, Any]:
+    def get_subsystem_telemetry(self, subsystem: str = "all", live_fluctuation: bool = False) -> dict[str, Any]:
         """Returns read-only operational telemetry for the specified subsystem or all systems."""
+        now = time.time()
+        solar_gen = 3840 + (int(35 * math.sin(now / 7.0)) if live_fluctuation else 0)
+        bat_volts = round(52.4 + (0.08 * math.cos(now / 11.0) if live_fluctuation else 0.0), 2)
+        bat_charge = round(94.0 + (0.2 * math.sin(now / 25.0) if live_fluctuation else 0.0), 1)
+        fiber_rtt = round(3.8 + (0.4 * math.sin(now / 5.0) if live_fluctuation else 0.0), 1)
+        sip_jitter = round(2.1 + (0.3 * math.cos(now / 6.0) if live_fluctuation else 0.0), 1)
+        switch_temp = round(38.2 + (0.3 * math.sin(now / 14.0) if live_fluctuation else 0.0), 1)
+        switch_poe = round(68.0 + (1.5 * math.cos(now / 9.0) if live_fluctuation else 0.0), 1)
+        packet_loss = round(18.0 + (1.2 * math.sin(now / 4.0) if live_fluctuation else 0.0), 1)
+        ambient_temp = round(24.1 + (0.2 * math.sin(now / 18.0) if live_fluctuation else 0.0), 1)
+
         telemetry_map: dict[str, Any] = {
             "telephony": {
                 "subsystem": "telephony",
@@ -46,7 +58,7 @@ class OperationalStateRegistry:
                     {"ext": "103", "label": "Solar Array Technician", "status": "ONLINE"},
                 ],
                 "active_trunk": "VoIP SIP Trunk - CNT Ecuador Telecom (E.164 Gov Policy)",
-                "trunk_quality": {"jitter_ms": 4.1, "packet_loss_pct": 0.2, "mos_score": 4.38},
+                "trunk_quality": {"jitter_ms": sip_jitter, "packet_loss_pct": 0.2, "mos_score": 4.38},
                 "policy_mode": "Strict Ecuador PSTN whitelist + fail-closed internal extension routing",
             },
             "solar_power": {
@@ -54,10 +66,10 @@ class OperationalStateRegistry:
                 "location": "Guayaquil Solar Array & Battery Storage Bank 1",
                 "status": "HEALTHY",
                 "inverter_model": "Growatt Hybrid 5kW SPF 5000 ES",
-                "solar_generation_watts": 3840,
+                "solar_generation_watts": solar_gen,
                 "pv_voltage_volts": 342.5,
-                "battery_charge_pct": 94.0,
-                "battery_voltage_volts": 52.4,
+                "battery_charge_pct": bat_charge,
+                "battery_voltage_volts": bat_volts,
                 "battery_temperature_c": 29.2,
                 "grid_synchronization": "CONNECTED (224V / 60Hz Guayaquil Grid)",
                 "phase_balance": "OPTIMAL (Phase A: 12.1A, Phase B: 11.8A)",
@@ -67,7 +79,7 @@ class OperationalStateRegistry:
                 "subsystem": "network_wifi",
                 "location": "Guayaquil Field Operations Backbone",
                 "status": "ALERT_ACTIVE",
-                "primary_wan": "1.0 Gbps Fiber (Telconet GYE) - RTT 3.8ms",
+                "primary_wan": f"1.0 Gbps Fiber (Telconet GYE) - RTT {fiber_rtt}ms",
                 "backup_wan": "Claro LTE Emergency Cellular Backup (Standby)",
                 "access_points": [
                     {"ap_id": "AP-ControlRoom", "band": "5GHz / WiFi 6", "clients": 12, "status": "OPTIMAL"},
@@ -75,11 +87,11 @@ class OperationalStateRegistry:
                         "ap_id": "AP-SolarYard",
                         "band": "2.4GHz / WiFi 6",
                         "clients": 4,
-                        "status": "DEGRADED (18% packet loss, channel interference detected)",
+                        "status": f"DEGRADED ({packet_loss}% packet loss, channel interference detected)",
                     },
                     {"ap_id": "AP-TelecomVault", "band": "5GHz / WiFi 6", "clients": 6, "status": "OPTIMAL"},
                 ],
-                "core_switch": "MikroTik CRS328-24P-4S+ (CPU: 8%, Temp: 38.2°C, PoE Load: 68W)",
+                "core_switch": f"MikroTik CRS328-24P-4S+ (CPU: 8%, Temp: {switch_temp}°C, PoE Load: {switch_poe}W)",
             },
             "dmx_lighting": {
                 "subsystem": "dmx_lighting",
@@ -97,7 +109,7 @@ class OperationalStateRegistry:
                 "status": "OPTIMAL",
                 "compute_host": "AMD Radeon AI PRO R9700 Edge Accelerator",
                 "audio_engine": "Boson AI Higgs Realtime S2S (Sub-125ms Interruption)",
-                "rack_ambient_temp_c": 24.1,
+                "rack_ambient_temp_c": ambient_temp,
                 "rack_exhaust_temp_c": 31.8,
                 "cpu_load_avg": [0.42, 0.38, 0.35],
                 "cryptographic_store": "ONLINE (SHA-256 Forensic Audit Fabric Active)",

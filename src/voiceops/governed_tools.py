@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import json
@@ -19,13 +19,14 @@ def get_operational_registry() -> OperationalStateRegistry:
     return _GLOBAL_REGISTRY
 
 
-def inspect_operational_state(subsystem: str = "all") -> dict[str, Any]:
+def inspect_operational_state(subsystem: str = "all", live_fluctuation: bool = False) -> dict[str, Any]:
     """READ-ONLY tool for inspecting operational telemetry across Guayaquil infrastructure.
 
     Args:
         subsystem: The target subsystem ('solar_power', 'telephony', 'network_wifi', 'dmx_lighting', 'servers_rack', or 'all').
+        live_fluctuation: Whether to include simulated micro-variations over time.
     """
-    return _GLOBAL_REGISTRY.get_subsystem_telemetry(subsystem)
+    return _GLOBAL_REGISTRY.get_subsystem_telemetry(subsystem, live_fluctuation=live_fluctuation)
 
 
 def propose_governed_action(
