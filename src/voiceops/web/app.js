@@ -28,6 +28,10 @@ let animationFrameId = null;
 
 let higgsWebSocket = null;
 let ephemeralToken = null;
+let bosonConnectionMode = "browser_fallback";
+let higgsAudioSampleRate = 24000;
+let useBrowserTtsFallback = true;
+let pendingTranscript = "";
 let activeAudioSources = [];
 let audioContext = null;
 let micStream = null;
@@ -118,9 +122,10 @@ function initVoiceProfiles() {
   });
 }
 
-// Speak text clearly using SpeechSynthesis + Web Audio fallback
-function speakText(text) {
+// Speak text clearly using SpeechSynthesis — only when Boson audio is unavailable
+function speakText(text, force = false) {
   if (!text || !window.speechSynthesis) return;
+  if (!force && !useBrowserTtsFallback) return;
 
   try {
     window.speechSynthesis.cancel();
@@ -158,7 +163,11 @@ function speakText(text) {
 
     utterance.onstart = () => {
       isAudioSpeaking = true;
-      document.getElementById("audioPlayingTag")?.classList.remove("hidden");
+      const tag = document.getElementById("audioPlayingTag");
+      if (tag) {
+        tag.textContent = "BROWSER TTS FALLBACK";
+        tag.classList.remove("hidden");
+      }
       document.getElementById("voiceOrb")?.classList.add("active");
     };
 
@@ -230,18 +239,34 @@ function initSpeechRecognition() {
 async function initBosonSession() {
   try {
     const res = await fetch("/api/boson/token");
-    if (!res.ok) throw new Error("Could not mint ephemeral token");
     const data = await res.json();
-    ephemeralToken = data.token;
+    ephemeralToken = data.token || null;
+    bosonConnectionMode = data.connection_mode || (data.ok ? "direct" : "browser_fallback");
+    higgsAudioSampleRate = data.sample_rate || 24000;
+    useBrowserTtsFallback = !data.ok;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}${data.ws_url || "/ws/higgs"}`;
+    let wsUrl;
+    let subprotocols = ["realtime"];
+    if (data.ok && data.ws_url && data.ws_url.startsWith("wss://")) {
+      wsUrl = data.ws_url;
+      subprotocols.push(`bai-client-secret.${data.token}`);
+      useBrowserTtsFallback = false;
+    } else {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl = `${protocol}//${window.location.host}${data.ws_url || "/ws/higgs"}`;
+      useBrowserTtsFallback = true;
+    }
 
-    higgsWebSocket = new WebSocket(wsUrl);
+    higgsWebSocket = new WebSocket(wsUrl, subprotocols);
 
     higgsWebSocket.onopen = () => {
-      console.log("⚡ Higgs Realtime WebSocket connected:", wsUrl);
-      setExecutionStep("Higgs WebSocket Live", "Stream active · Sub-50ms Barge-in enabled");
+      console.log("⚡ Higgs Realtime WebSocket connected:", wsUrl, bosonConnectionMode);
+      setExecutionStep(
+        useBrowserTtsFallback ? "Browser Voice Fallback" : "Higgs Realtime Live",
+        useBrowserTtsFallback
+          ? "BROWSER TTS FALLBACK · STT via SpeechRecognition"
+          : "Upstream Boson · Sub-50ms Barge-in enabled"
+      );
     };
 
     higgsWebSocket.onmessage = (event) => {
@@ -273,12 +298,24 @@ function handleHiggsServerEvent(event) {
     console.log("Higgs Session active:", event.session?.id);
     document.getElementById("turnStatus").textContent = "Higgs Realtime Streaming";
     document.getElementById("turnStatus").className = "status-badge active";
-  } else if (type === "response.audio_transcript.delta") {
+  } else if (
+    type === "response.output_audio_transcript.delta" ||
+    type === "response.audio_transcript.delta" ||
+    type === "response.text.delta"
+  ) {
     const text = event.delta || "";
+    pendingTranscript += text;
     if (text) {
       appendChat("agent", text);
-      setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-      speakText(text);
+      setExecutionStep(
+        event.audio_source === "BROWSER TTS FALLBACK" ? "BROWSER TTS FALLBACK" : "Higgs Speaking",
+        event.audio_source === "BROWSER TTS FALLBACK"
+          ? "Browser SpeechSynthesis output"
+          : "Boson Higgs audio stream"
+      );
+      if (event.audio_source === "BROWSER TTS FALLBACK" || useBrowserTtsFallback) {
+        speakText(text, true);
+      }
     }
     if (event.tool_records && event.tool_records.length > 0) {
       event.tool_records.forEach((rec) => {
@@ -295,19 +332,32 @@ function handleHiggsServerEvent(event) {
     if (event.subsystem) {
       highlightDashboardCard(event.subsystem);
     }
-  } else if (type === "response.audio.delta") {
-    // Real PCM16 binary audio streaming to Web Audio API buffer queue
+  } else if (type === "response.output_audio.delta" || type === "response.audio.delta") {
     const base64Audio = event.delta || "";
     if (base64Audio) {
-      playPCM16AudioChunk(base64Audio);
+      useBrowserTtsFallback = false;
+      const tag = document.getElementById("audioPlayingTag");
+      if (tag) {
+        tag.textContent = "HIGGS AUDIO";
+        tag.classList.remove("hidden");
+      }
+      playPCM16AudioChunk(base64Audio, event.sample_rate || higgsAudioSampleRate);
+    }
+  } else if (type === "response.done") {
+    pendingTranscript = "";
+    if (useBrowserTtsFallback && pendingTranscript) {
+      speakText(pendingTranscript, true);
     }
   } else if (type === "input_audio_buffer.speech_started") {
     cancelAllAudioPlayback();
+  } else if (type === "error") {
+    console.warn("Higgs error event:", event);
+    useBrowserTtsFallback = true;
   }
 }
 
 // Web Audio API: Play PCM16 Mono 16kHz audio chunk through hardware destination
-function playPCM16AudioChunk(base64Data) {
+function playPCM16AudioChunk(base64Data, sampleRate = 24000) {
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
@@ -326,7 +376,7 @@ function playPCM16AudioChunk(base64Data) {
       float32Array[i] = int16Array[i] / 32768.0;
     }
 
-    const audioBuffer = audioContext.createBuffer(1, float32Array.length, 16000);
+    const audioBuffer = audioContext.createBuffer(1, float32Array.length, sampleRate);
     audioBuffer.getChannelData(0).set(float32Array);
 
     const source = audioContext.createBufferSource();
@@ -374,6 +424,7 @@ function triggerInstantBargeIn() {
   cancelAllAudioPlayback();
 
   if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
+    higgsWebSocket.send(JSON.stringify({ type: "response.cancel" }));
     higgsWebSocket.send(
       JSON.stringify({
         type: "input_audio_buffer.speech_started",
@@ -413,16 +464,20 @@ async function startLiveVoice() {
     scriptProcessorNode.onaudioprocess = (e) => {
       if (!isVoiceActive) return;
       const inputData = e.inputBuffer.getChannelData(0);
+      const inRate = audioContext.sampleRate || 48000;
+      const targetRate = higgsAudioSampleRate;
+      const ratio = inRate / targetRate;
+      const outLen = Math.floor(inputData.length / ratio);
+      const pcm16 = new Int16Array(outLen);
       let sum = 0;
-      const pcm16 = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        const s = Math.max(-1, Math.min(1, inputData[i]));
+      for (let i = 0; i < outLen; i++) {
+        const srcIdx = Math.min(inputData.length - 1, Math.floor(i * ratio));
+        const s = Math.max(-1, Math.min(1, inputData[srcIdx]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        sum += Math.abs(inputData[i]);
+        sum += Math.abs(inputData[srcIdx]);
       }
-      const avg = sum / inputData.length;
+      const avg = sum / Math.max(outLen, 1);
 
-      // Realtime Hardware VAD: If user speaks while agent audio is streaming, interrupt immediately!
       if (avg > 0.05 && isAudioSpeaking) {
         triggerInstantBargeIn();
       }
@@ -573,8 +628,8 @@ async function processSpokenCommand(text) {
 
     const reply = data.reply || "Operational query processed.";
     appendChat("agent", reply);
-    setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-    speakText(reply);
+    setExecutionStep("BROWSER TTS FALLBACK", "HTTP converse fallback · SpeechSynthesis");
+    speakText(reply, true);
 
     if (data.subsystem) {
       highlightDashboardCard(data.subsystem);
