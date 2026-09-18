@@ -19,7 +19,7 @@ def test_truth_retrofit_subsystem_contracts() -> None:
         item = telemetry["subsystems"][sub_name]
         assert "source_provider" in item
         assert "truth" in item
-        assert item["truth"] in ["LIVE", "REPLAY", "SYNTHETIC", "UNVERIFIED"]
+        assert item["truth"] in ["LIVE", "REPLAY", "SYNTHETIC", "UNVERIFIED", "NOT_CONNECTED", "OFFLINE"]
         assert "observed_at" in item
         assert "freshness_seconds" in item
         assert "status" in item
@@ -30,24 +30,21 @@ def test_truth_retrofit_individual_inspection_metadata() -> None:
     assert sol["subsystem"] == "solar_power"
     assert "truth" in sol
     assert "source_provider" in sol
-    assert sol["data"]["solar_generation_watts"] == 529
-    assert sol["data"]["battery_charge_pct"] == 100.0
+    assert sol["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
 
     alm = inspect_operational_state("security_alarm")
     assert alm["subsystem"] == "security_alarm"
-    assert alm["truth"] == "LIVE"
-    assert alm["data"]["monitored_zones_count"] == 10
+    assert alm["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
 
     cam = inspect_operational_state("video_surveillance")
     assert cam["subsystem"] == "video_surveillance"
-    assert cam["truth"] == "LIVE"
-    assert len(cam["data"]["channels"]) == 2
+    assert cam["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
 
     tel = inspect_operational_state("telephony")
     assert tel["subsystem"] == "telephony"
     assert "truth" in tel
     assert "source_provider" in tel
-    assert tel["data"]["hardware"] == "Grandstream UCM6104 (Firmware 1.0.20.48)"
+    assert tel["data"]["hardware"] == "Grandstream UCM6104"
 
 
 def test_insforge_non_blocking_provider() -> None:
@@ -57,7 +54,7 @@ def test_insforge_non_blocking_provider() -> None:
 
     res_session = ins.start_session("test-session-001")
     assert res_session["mirrored"] is False
-    assert res_session["status"] == "disabled_or_unconfigured"
+    assert "NOT CONNECTED" in res_session["status"] or res_session["status"] == "disabled_or_unconfigured"
 
     res_event = ins.append_event("test-session-001", "alarm.triggered", {"zone": "Yard"})
     assert res_event["mirrored"] is False

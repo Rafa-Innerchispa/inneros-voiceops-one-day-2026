@@ -468,15 +468,22 @@ class HiggsRealtimeSession:
 
         data = inspect_res.get("data", {})
         if target_sub == "security_alarm":
-            part = data.get("partition", "Panel Home Ralphi")
-            zones_cnt = data.get("monitored_zones_count", 10)
-            in_alarm = data.get("is_in_alarm", False)
-            alarm_str = "SIN DISPAROS ni eventos de intrusión" if not in_alarm else "ALERTA DE DISPARO ACTIVA"
-            reply = (
-                f"El estado de la alarma Intelbras en la partición '{part}' es DESARMADO y óptimo, con {zones_cnt} zonas perimetrales activamente monitoreadas y {alarm_str}."
-                if is_spanish
-                else f"Intelbras Security Alarm partition '{part}' is currently DISARMED and optimal. All {zones_cnt} perimeter zones are actively monitored with zero security breaches."
-            )
+            if inspect_res.get("truth") != "LIVE":
+                reply = (
+                    "No tengo telemetría en vivo de la alarma Intelbras en este momento (Home Assistant no conectado o sin lectura)."
+                    if is_spanish
+                    else "Live Intelbras alarm telemetry is unavailable (Home Assistant not connected or read failed)."
+                )
+            else:
+                part = data.get("partition", "Panel Home Ralphi")
+                zones_cnt = data.get("monitored_zones_count", 10)
+                in_alarm = data.get("is_in_alarm", False)
+                alarm_str = "SIN DISPAROS ni eventos de intrusión" if not in_alarm else "ALERTA DE DISPARO ACTIVA"
+                reply = (
+                    f"El estado de la alarma Intelbras en la partición '{part}' es DESARMADO y óptimo, con {zones_cnt} zonas perimetrales activamente monitoreadas y {alarm_str}."
+                    if is_spanish
+                    else f"Intelbras Security Alarm partition '{part}' is currently DISARMED and optimal. All {zones_cnt} perimeter zones are actively monitored with zero security breaches."
+                )
         elif target_sub == "video_surveillance":
             nvr = data.get("nvr_host", "192.168.1.100")
             channels = data.get("channels", [])
@@ -487,16 +494,23 @@ class HiggsRealtimeSession:
                 else f"Dahua Video Surveillance on {nvr} is live streaming 30 FPS feeds on channels {ch_desc}. Physical Guardian VideoMotion dispatcher is actively tracking perimeter movement."
             )
         elif target_sub == "solar_power":
-            watts = data.get("solar_generation_watts", 529)
-            bat = data.get("battery_charge_pct", 100)
-            grid_v = data.get("grid_voltage_volts", 120.6)
-            amps = data.get("phase_a_current_amps", 6.11)
-            pwr = data.get("phase_a_power_watts", 593)
-            reply = (
-                f"El arreglo solar está generando {watts} watts con batería al {bat}% en modo de carga solar. El voltaje de red en la fase A registra {grid_v} voltios, {amps} amperios y {pwr} watts de consumo."
-                if is_spanish
-                else f"Solar array is generating {watts} watts with battery at {bat}% capacity in solar charging mode. Main breaker grid is reading {grid_v} volts, {amps} amps, and {pwr} watts."
-            )
+            if inspect_res.get("truth") != "LIVE":
+                reply = (
+                    "No puedo leer el inversor solar en vivo ahora mismo. Conecta Home Assistant (HASS_URL/HASS_TOKEN) para telemetría real."
+                    if is_spanish
+                    else "Live solar inverter telemetry is unavailable. Configure Home Assistant (HASS_URL/HASS_TOKEN) for real readings."
+                )
+            else:
+                watts = data.get("solar_generation_watts")
+                bat = data.get("battery_charge_pct")
+                grid_v = data.get("grid_voltage_volts")
+                amps = data.get("phase_a_current_amps")
+                pwr = data.get("phase_a_power_watts")
+                reply = (
+                    f"El arreglo solar está generando {watts} watts con batería al {bat}%. El voltaje de red en la fase A registra {grid_v} voltios, {amps} amperios y {pwr} watts de consumo."
+                    if is_spanish
+                    else f"Solar array is generating {watts} watts with battery at {bat}%. Main breaker grid is reading {grid_v} volts, {amps} amps, and {pwr} watts."
+                )
         elif target_sub == "telephony":
             exts = [e.get("ext") for e in data.get("registered_extensions", [])]
             exts_str = ", ".join(exts) if exts else "activas"

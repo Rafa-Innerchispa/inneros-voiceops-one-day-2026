@@ -135,26 +135,79 @@ def submit_user_approval(
 
 
 def inneros_analyze_incident(query: str, subsystem: str = "all") -> dict[str, Any]:
-    """Complex incident analysis tool powered by local Qwen / InnerOS reasoning engine."""
+    """Complex incident analysis via local Qwen / AMD runtime when reachable."""
+    import json as _json
+    from datetime import datetime, timezone
+
     from .adapters.local_amd import LocalAMDReasoner
+
     reasoner = LocalAMDReasoner()
-    
-    analysis_result = {
-        "tool": "inneros_analyze_incident",
+    telemetry = inspect_operational_state(subsystem)
+    prompt_context = {
         "query": query,
         "subsystem": subsystem,
-        "incident_id": "INC_20260917_GRID_SAG",
-        "root_cause": (
-            "Análisis de Causa Raíz (InnerOS / Qwen Node AG-41): Ayer a las 14:22 ECT se registró una fluctuación de voltaje en la red pública de Guayaquil (caída transitoria a 98.4V durante 180ms). "
-            "El inversor solar Xmart conmutó a modo batería con éxito, pero la perturbación electromagnética residual indujo congestión y retransmisión de paquetes (18% loss) en el AP-SolarYard y jitter en la troncal SIP Grandstream. "
-            "Diagnóstico de estabilidad actual: La red se estabiliza de inmediato al ejecutar el ciclo de energía PoE sobre AP-SolarYard."
-        ),
-        "recommendation": "Ejecutar reinicio PoE controlado bajo autorización verbal en VoiceOps para restablecer la tasa de pérdida a 0.0%.",
-        "engine": "InnerOS Local Qwen Engine (AMD Ryzen 9 7900X / Radeon AI PRO R9700)",
-        "model": reasoner.model,
-        "timestamp": "2026-09-18T20:35:00Z",
+        "telemetry_truth": telemetry.get("truth"),
+        "telemetry": telemetry.get("data") or telemetry.get("subsystems"),
     }
-    return analysis_result
+
+    request_payload = {
+        "model": reasoner.model,
+        "temperature": 0.2,
+        "max_tokens": 400,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Eres el motor de análisis de incidentes InnerOS. Responde SOLO JSON con keys: "
+                    "root_cause, recommendation. Usa la telemetría provista; si truth=UNVERIFIED di que faltan datos en vivo."
+                ),
+            },
+            {"role": "user", "content": _json.dumps(prompt_context, ensure_ascii=False)},
+        ],
+    }
+
+    try:
+        response = reasoner._post_json(reasoner.endpoint, request_payload, reasoner.timeout_seconds)
+        from .adapters.local_amd import _extract_content, _extract_summary
+
+        content = _extract_content(response)
+        parsed: dict[str, Any] = {}
+        try:
+            parsed = _json.loads(content)
+        except _json.JSONDecodeError:
+            parsed = {"root_cause": content.strip(), "recommendation": ""}
+
+        return {
+            "tool": "inneros_analyze_incident",
+            "query": query,
+            "subsystem": subsystem,
+            "root_cause": parsed.get("root_cause") or content,
+            "recommendation": parsed.get("recommendation", ""),
+            "engine": "InnerOS Local Qwen Engine",
+            "model": reasoner.model,
+            "route": {
+                "provider": "local-amd-5",
+                "truth": "LIVE_MODEL_RESPONSE",
+                "external_fallback": False,
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        return {
+            "tool": "inneros_analyze_incident",
+            "query": query,
+            "subsystem": subsystem,
+            "root_cause": f"Qwen runtime unreachable: {exc}",
+            "recommendation": "Verify VOICEOPS_AMD5_URL and local vLLM service.",
+            "engine": "InnerOS Local Qwen Engine",
+            "model": reasoner.model,
+            "route": {
+                "provider": "local-amd-5",
+                "truth": "OFFLINE",
+                "external_fallback": False,
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 # Schemas for OpenAI Realtime / Higgs Realtime function calling
