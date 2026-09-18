@@ -495,6 +495,35 @@ body {
   cursor: not-allowed;
 }
 
+.voice-config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-select-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.voice-select-input {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+}
+
+.voice-select-input:focus {
+  border-color: var(--border-focus);
+}
+
 .scenario-bar {
   display: flex;
   align-items: center;

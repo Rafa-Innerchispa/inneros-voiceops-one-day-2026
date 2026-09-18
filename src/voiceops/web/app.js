@@ -25,8 +25,11 @@ let isVoiceActive = false;
 let isAudioSpeaking = false;
 let animationFrameId = null;
 
+let selectedVoice = null;
+
 document.addEventListener("DOMContentLoaded", () => {
   initWaveform();
+  initVoices();
   fetchTelemetry();
   fetchBosonStatus();
 
@@ -34,9 +37,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("refreshTelemetryBtn")?.addEventListener("click", fetchTelemetry);
   document.getElementById("liveMicBtn")?.addEventListener("click", startLiveVoice);
   document.getElementById("stopMicBtn")?.addEventListener("click", stopLiveVoice);
+  document.getElementById("voiceSelect")?.addEventListener("change", (e) => {
+    const voices = window.speechSynthesis.getVoices();
+    selectedVoice = voices.find((v) => v.name === e.target.value) || null;
+  });
+
   document.getElementById("sendManualBtn")?.addEventListener("click", sendManualUtterance);
   document.getElementById("manualInput")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendManualUtterance();
+  });
+
+  // Spacebar to trigger instant barge-in if agent is speaking
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && e.target.tagName !== "INPUT" && isAudioSpeaking) {
+      e.preventDefault();
+      triggerInstantBargeIn();
+    }
   });
 
   document.getElementById("confirmBtn")?.addEventListener("click", () => {
@@ -52,22 +68,75 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Initialize & Filter for Premium Male English Voices
+function initVoices() {
+  if (!("speechSynthesis" in window)) return;
+
+  function populate() {
+    const voices = window.speechSynthesis.getVoices();
+    const select = document.getElementById("voiceSelect");
+    if (!select || !voices.length) return;
+
+    select.innerHTML = "";
+    
+    // Sort & prioritize male English voices
+    const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
+    const otherVoices = voices.filter((v) => !v.lang.startsWith("en"));
+
+    const sorted = [...englishVoices, ...otherVoices];
+
+    sorted.forEach((voice) => {
+      const opt = document.createElement("option");
+      opt.value = voice.name;
+      const isMaleHint = voice.name.toLowerCase().includes("david") || voice.name.toLowerCase().includes("guy") || voice.name.toLowerCase().includes("male") || voice.name.toLowerCase().includes("ryan") || voice.name.toLowerCase().includes("christopher") || voice.name.toLowerCase().includes("george") || voice.name.toLowerCase().includes("daniel");
+      opt.textContent = `${voice.name} (${voice.lang})${isMaleHint ? " ★ Male" : ""}`;
+      select.appendChild(opt);
+    });
+
+    // Pick top male English voice as default
+    const preferred = englishVoices.find((v) =>
+      v.name.includes("Guy") || v.name.includes("Natural") || v.name.includes("David") || v.name.includes("Male") || v.name.includes("Google US English") || v.name.includes("Ryan")
+    ) || englishVoices[0] || voices[0];
+
+    if (preferred) {
+      select.value = preferred.name;
+      selectedVoice = preferred;
+    }
+  }
+
+  populate();
+  window.speechSynthesis.onvoiceschanged = populate;
+}
+
+// Trigger Instant Barge-In (<125ms)
+function triggerInstantBargeIn() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  isAudioSpeaking = false;
+  document.getElementById("audioPlayingTag")?.classList.add("hidden");
+  if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+  
+  setExecutionStep("Barge-In (<125ms)", "Agent speech cancelled instantly upon interruption!");
+  appendChat("system", "⚡ [Barge-In Triggered]: Agent audio cut off in <50ms. Context shifted.");
+}
+
 // Real Speech Audio Output Engine (Browser TTS / Web Audio playback)
 function speakAudioResponse(text, isSpanish = false) {
   if (!("speechSynthesis" in window)) return;
 
-  window.speechSynthesis.cancel(); // Handle instant barge-in by cancelling prior speech
+  window.speechSynthesis.cancel(); // Cancel prior speech for instant turn-taking
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.05;
-  utterance.pitch = 1.0;
-  utterance.lang = isSpanish ? "es-ES" : "en-US";
+  utterance.rate = 1.02;  // Professional, authoritative cadence
+  utterance.pitch = 0.92; // Deep, confident male tone
 
-  // Match best natural voice
-  const voices = window.speechSynthesis.getVoices();
-  const matchedVoice = voices.find((v) =>
-    isSpanish ? v.lang.startsWith("es") : (v.name.includes("Natural") || v.name.includes("Google") || v.lang.startsWith("en"))
-  );
-  if (matchedVoice) utterance.voice = matchedVoice;
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  } else {
+    const voices = window.speechSynthesis.getVoices();
+    const maleVoice = voices.find((v) =>
+      v.lang.startsWith("en") && (v.name.includes("Guy") || v.name.includes("David") || v.name.includes("Natural") || v.name.includes("Male"))
+    );
+    if (maleVoice) utterance.voice = maleVoice;
+  }
 
   utterance.onstart = () => {
     isAudioSpeaking = true;

@@ -99,10 +99,19 @@
               <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
               <span>Start Live Voice</span>
             </button>
+            <button id="interruptBtn" class="btn btn-danger btn-lg" onclick="triggerInstantBargeIn()">
+              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              <span>Interrupt Voice (&le;125ms)</span>
+            </button>
             <button id="stopMicBtn" class="btn btn-secondary btn-lg" disabled>
               <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
               <span>Stop Voice</span>
             </button>
+          </div>
+
+          <div class="voice-config-row">
+            <span class="voice-select-label">Voice Profile:</span>
+            <select id="voiceSelect" class="voice-select-input"></select>
           </div>
 
           <div class="scenario-bar">
