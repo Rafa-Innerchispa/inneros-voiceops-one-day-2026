@@ -359,6 +359,18 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         try:
+            if self.path == "/api/telephony/register-extension":
+                from .governed_tools import get_operational_registry
+                payload = self._read_json()
+                ext = str(payload.get("ext") or "").strip()
+                label = str(payload.get("label") or "Field Extension").strip()
+                if not ext:
+                    self._send_json({"error": "Extension number is required"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                reg = get_operational_registry()
+                res = reg.register_extension(ext=ext, label=label)
+                self._send_json({"status": "REGISTERED", "extension": res, "total_registered": len(reg._registered_extensions)})
+                return
             if self.path == "/api/governed/inspect":
                 from .governed_tools import inspect_operational_state
                 payload = self._read_json()

@@ -30,6 +30,25 @@ class OperationalStateRegistry:
     _active_proposals: dict[str, ActionProposal] = field(default_factory=dict)
     _evidence_events: list[EvidenceEvent] = field(default_factory=list)
     _permit_manager: VoiceExecutionPermitManager = field(default_factory=VoiceExecutionPermitManager)
+    _registered_extensions: list[dict[str, str]] = field(
+        default_factory=lambda: [
+            {"ext": "100", "label": "Control Room Dispatcher", "status": "ONLINE"},
+            {"ext": "101", "label": "Field Operations Lead", "status": "ONLINE"},
+            {"ext": "102", "label": "Substation Engineer", "status": "ONLINE"},
+            {"ext": "103", "label": "Solar Array Technician", "status": "ONLINE"},
+        ]
+    )
+
+    def register_extension(self, ext: str, label: str = "Field Extension", status: str = "ONLINE") -> dict[str, str]:
+        """Registers a new SIP extension in the Grandstream UCM6104 PBX state."""
+        existing = next((e for e in self._registered_extensions if e["ext"] == ext), None)
+        if existing:
+            existing["status"] = status
+            existing["label"] = label
+            return existing
+        new_ext = {"ext": ext, "label": label, "status": status}
+        self._registered_extensions.append(new_ext)
+        return new_ext
 
     def get_subsystem_telemetry(self, subsystem: str = "all", live_fluctuation: bool = False) -> dict[str, Any]:
         """Returns read-only operational telemetry for the specified subsystem or all systems."""
@@ -51,12 +70,7 @@ class OperationalStateRegistry:
                 "status": "OPERATIONAL",
                 "hardware": "Grandstream UCM6104 (Firmware 1.0.20.48)",
                 "sip_bind": "UDP 4321 / G.711u / PCM16 mono 16kHz",
-                "registered_extensions": [
-                    {"ext": "100", "label": "Control Room Dispatcher", "status": "ONLINE"},
-                    {"ext": "101", "label": "Field Operations Lead", "status": "ONLINE"},
-                    {"ext": "102", "label": "Substation Engineer", "status": "ONLINE"},
-                    {"ext": "103", "label": "Solar Array Technician", "status": "ONLINE"},
-                ],
+                "registered_extensions": list(self._registered_extensions),
                 "active_trunk": "VoIP SIP Trunk - CNT Ecuador Telecom (E.164 Gov Policy)",
                 "trunk_quality": {"jitter_ms": sip_jitter, "packet_loss_pct": 0.2, "mos_score": 4.38},
                 "policy_mode": "Strict Ecuador PSTN whitelist + fail-closed internal extension routing",
@@ -65,13 +79,13 @@ class OperationalStateRegistry:
                 "subsystem": "solar_power",
                 "location": "Guayaquil Solar Array & Battery Storage Bank 1",
                 "status": "HEALTHY",
-                "inverter_model": "Growatt Hybrid 5kW SPF 5000 ES",
+                "inverter_model": "Growatt Hybrid 5kW SPF 5000 ES (110V / 60Hz)",
                 "solar_generation_watts": solar_gen,
                 "pv_voltage_volts": 342.5,
                 "battery_charge_pct": bat_charge,
                 "battery_voltage_volts": bat_volts,
                 "battery_temperature_c": 29.2,
-                "grid_synchronization": "CONNECTED (224V / 60Hz Guayaquil Grid)",
+                "grid_synchronization": "CONNECTED (110V / 60Hz Guayaquil Grid)",
                 "phase_balance": "OPTIMAL (Phase A: 12.1A, Phase B: 11.8A)",
                 "daily_yield_kwh": 18.64,
             },
