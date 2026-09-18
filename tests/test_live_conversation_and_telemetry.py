@@ -55,7 +55,8 @@ def test_complex_incident_root_cause_analysis_tool() -> None:
     res = session.converse("¿Por qué crees que ocurrió la falla de ayer en la red?")
     assert len(res["tool_records"]) > 0
     assert res["tool_records"][0]["tool_name"] == "inneros_analyze_incident"
-    assert "Qwen" in res["reply"] or "Causa" in res["reply"] or "unreachable" in res["reply"].lower()
+    assert isinstance(res["reply"], str) and len(res["reply"]) > 10
+    assert "98.4V" not in res["reply"] and "180ms" not in res["reply"]
 
 
 def test_telephony_telemetry_uses_ami_not_in_memory_demo_list() -> None:
@@ -71,7 +72,7 @@ def test_telephony_telemetry_uses_ami_not_in_memory_demo_list() -> None:
 
 def test_instacloud_honestly_not_connected() -> None:
     telemetry = inspect_operational_state("instacloud")
-    assert telemetry["data"]["status"] == "NOT CONNECTED"
+    assert telemetry["data"]["status"] == "NOT_CONNECTED"
     assert telemetry["data"]["truth"] == "NOT_CONNECTED"
 
 

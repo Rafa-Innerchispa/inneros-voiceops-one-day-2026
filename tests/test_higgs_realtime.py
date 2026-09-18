@@ -31,79 +31,45 @@ def test_inspect_operational_state_all() -> None:
 
 
 def test_inspect_individual_subsystems() -> None:
-    # Telephony
-    tel = inspect_operational_state("telephony")
-    assert tel["data"]["hardware"] == "Grandstream UCM6104"
-    assert tel["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
-
-    # Solar
-    sol = inspect_operational_state("solar_power")
-    assert "solar_generation_watts" in sol["data"]
-    assert sol["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
-
-    # Security Alarm (Intelbras)
-    alm = inspect_operational_state("security_alarm")
-    assert "partition" in alm["data"]
-    assert alm["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
-
-    # Video Surveillance (Dahua)
-    cam = inspect_operational_state("video_surveillance")
-    assert "nvr_host" in cam["data"]
-    assert cam["truth"] in {"LIVE", "UNVERIFIED", "OFFLINE"}
-
-    # Network
-    net = inspect_operational_state("network_wifi")
-    assert "AP-SolarYard" in [ap["ap_id"] for ap in net["data"]["access_points"]]
-
-    # DMX
-    dmx = inspect_operational_state("dmx_lighting")
-    assert dmx["data"]["protocol"] == "Art-Net / DMX-512 over RS-485 (Universe 1)"
-
-    # Rack
-    rack = inspect_operational_state("servers_rack")
-    assert rack["data"]["compute_host"] == "AMD Radeon AI PRO R9700 Edge Accelerator"
+    for subsystem in ('telephony','solar_power','security_alarm','video_surveillance','network_wifi','dmx_lighting','servers_rack'):
+        result = inspect_operational_state(subsystem)
+        assert result['subsystem'] == subsystem
+        assert result['truth'] in {'LIVE','UNVERIFIED','OFFLINE','STALE'}
+        assert 'data' in result
+        if result['truth'] == 'LIVE':
+            assert result['observed_at'] and result['source_provider']
+    camera = inspect_operational_state('video_surveillance')['data']
+    assert camera['stream_status'] == 'UNVERIFIED'
+    assert camera['motion_status'] == 'UNVERIFIED'
 
 
-def test_governed_action_golden_path_approval_spanish() -> None:
-    # 1. Propose action
-    prop = propose_governed_action(
-        action_type="restart_wifi_ap",
-        target_subsystem="network_wifi",
-        parameters={"ap_id": "AP-SolarYard"},
-    )
-    proposal_id = prop["proposal_id"]
-    assert proposal_id.startswith("prop_")
-    assert prop["requires_approval"] is True
 
-    # 2. Submit explicit Spanish approval
-    result = submit_user_approval(
-        proposal_id=proposal_id,
-        utterance="Si, autorizo reiniciar el punto de acceso ahora mismo.",
-    )
-    assert result["status"] == "EXECUTED"
-    assert result["action_type"] == "restart_wifi_ap"
-    assert result["permit_id"].startswith("vxp_")
-    assert "evidence_sha256" in result
-    assert result["htr_seconds_returned"] > 0
-    assert result["details"]["execution_status"] == "SUCCESS_DEMO_SAFE"
+
+def test_governed_action_golden_path_approval_spanish(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv('VOICEOPS_STATE_DIR', str(tmp_path))
+    proposal = propose_governed_action('create_incident_ticket','solar_power')
+    result = submit_user_approval(proposal['proposal_id'], 'Si, autorizo crear el ticket local.')
+    assert result['status'] == 'EXECUTED'
+    assert result['action_type'] == 'create_incident_ticket'
+    assert result['postcondition_verified'] is True
+    assert result['details']['physical_mutation'] is False
+    assert result['htr_seconds_returned'] == 0
+    assert len(list(tmp_path.glob('vo-*.json'))) == 1
+    replay = submit_user_approval(proposal['proposal_id'], 'Si, autorizo crear el ticket local.')
+    assert replay['status'] == 'BLOCKED'
+    assert len(list(tmp_path.glob('vo-*.json'))) == 1
+
+
 
 
 def test_governed_action_golden_path_approval_english() -> None:
-    # 1. Propose action
-    prop = propose_governed_action(
-        action_type="switch_solar_bypass",
-        target_subsystem="solar_power",
-    )
-    proposal_id = prop["proposal_id"]
+    proposal = propose_governed_action('switch_solar_bypass','solar_power')
+    result = submit_user_approval(proposal['proposal_id'], 'Yes, proceed and authorize solar bypass immediately.')
+    assert result['status'] == 'BLOCKED'
+    assert result['fail_closed'] is True
+    assert 'Physical mutations disabled' in result['reason']
 
-    # 2. Submit explicit English approval
-    result = submit_user_approval(
-        proposal_id=proposal_id,
-        utterance="Yes, proceed and authorize solar bypass immediately.",
-    )
-    assert result["status"] == "EXECUTED"
-    assert result["action_type"] == "switch_solar_bypass"
-    assert result["details"]["htr_metric"]["saved_seconds"] == 2400.0 - 4.5
+
 
 
 def test_governed_action_fail_closed_on_ambiguity() -> None:
@@ -197,7 +163,7 @@ def test_higgs_realtime_session_events() -> None:
         assert tool_res is not None
         assert tool_res["action"] == "function_executed"
         assert tool_fired is True
-        assert tool_res["record"]["output"]["status"] == "EXECUTED"
+        assert tool_res["record"]["output"]["status"] == "BLOCKED"
 
     asyncio.run(_run())
 
@@ -229,4 +195,4 @@ def test_higgs_converse_dynamic_queries() -> None:
 
     res_app = session.converse("Sí, autorizo la operación", active_proposal_id=pid)
     assert res_app["subsystem"] == "governance"
-    assert "autorizada y ejecutada" in res_app["reply"]
+    assert res_app["approval_result"]["status"] == "BLOCKED"

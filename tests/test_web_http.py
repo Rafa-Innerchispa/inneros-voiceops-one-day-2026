@@ -37,7 +37,7 @@ def test_http_server_serves_ui_and_governed_api_flow() -> None:
 
         health = _get_json(base + "/healthz")
         assert health["ok"] is True
-        assert health["service"] == "inneros-voiceops"
+        assert health["service"] == "inneros-voiceops-boson"
         assert health["production_writes"] is False
 
         initial = _get_json(base + "/api/state")
@@ -158,9 +158,9 @@ def test_voice_status_reports_audio_source_and_provider_modes() -> None:
     try:
         status = _get_json(base + "/api/voice/status")
         assert status["AUDIO_SOURCE"] in {"HIGGS", "BROWSER_TTS_FALLBACK", "NONE"}
-        assert status["STT_SOURCE"] == "BROWSER_SPEECH_RECOGNITION"
+        assert status["STT_SOURCE"] == "SESSION_NEGOTIATED"
         providers = status["providers"]
-        assert providers["browser_tts"]["mode"] == "BROWSER_TTS_FALLBACK"
+        assert providers["browser_tts"]["mode"] == "FALLBACK"
         assert providers["instacloud"]["mode"] == "NOT_CONNECTED"
         assert "boson_higgs" in providers
         assert "home_assistant" in providers
@@ -173,40 +173,18 @@ def test_voice_status_reports_audio_source_and_provider_modes() -> None:
         thread.join(timeout=3)
 
 
-def test_guardian_voice_http_bridge_allows_loopback_without_shared_token() -> None:
-    server = VoiceOpsDemoServer(("127.0.0.1", 0))
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    host, port = server.server_address
-    base = f"http://{host}:{port}"
-    event = {
-        "event_id": "evt_loopback_001",
-        "source_id": "camera-2",
-        "event_type": "zone.person.dwell",
-        "severity": "high",
-        "occurred_at": "2026-09-11T12:30:00+00:00",
-        "tenant_id": "tenant-demo",
-        "site_id": "site-demo",
-        "zone_id": "Puerta",
-        "confidence": 0.9,
-    }
+def test_guardian_voice_http_bridge_rejects_unauthenticated_forwarded_loopback() -> None:
+    from urllib.error import HTTPError
+    import pytest
+    server = VoiceOpsDemoServer(('127.0.0.1',0))
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    base = 'http://127.0.0.1:' + str(server.server_address[1])
     try:
-        health = _get_json(base + "/healthz")
-        assert health["guardian_voice_bridge_enabled"] is True
-        assert health["guardian_voice_bridge_mode"] == "loopback_only"
-        proposed = _post_json(
-            base + "/api/guardian/voice-command",
-            {"event": event, "transcript": "Revisa esta incidencia"},
-        )
-        assert proposed["bridge_event_id"] == "evt_loopback_001"
-        assert proposed["pending_approval"] is True
-        completed = _post_json(
-            base + "/api/guardian/voice-command",
-            {"event": event, "transcript": "Sí, autorizo"},
-        )
-        assert completed["action"]["details"]["source_event_id"] == "evt_loopback_001"  # type: ignore[index]
-        assert completed["last_result"]["permit_single_use"] is True  # type: ignore[index]
+        health = _get_json(base+'/healthz')
+        assert health['guardian_voice_bridge_enabled'] is False
+        assert health['guardian_voice_bridge_mode'] == 'disabled'
+        with pytest.raises(HTTPError) as caught:
+            urlopen(Request(base+'/api/guardian/voice-command', data=json.dumps({'event':{'event_id':'no-auth'},'transcript':'Si, autorizo'}).encode(), headers={'Content-Type':'application/json','X-Forwarded-For':'198.51.100.20'}, method='POST'), timeout=3)
+        assert caught.value.code == 401
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=3)
+        server.shutdown(); server.server_close(); thread.join(timeout=3)
