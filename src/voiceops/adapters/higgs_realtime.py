@@ -360,7 +360,7 @@ class HiggsRealtimeSession:
             "telephony": ["telefonia", "telefonía", "telephony", "sip", "pbx", "llamada", "llamadas", "call", "extension", "extensión", "extensiones", "grandstream", "voip", "ami", "troncal", "zoiper"],
             "network_wifi": ["wifi", "wi-fi", "access point", "punto de acceso", "ap-solaryard", "solaryard", "unifi", "udm", "internet", "wan", "packet loss", "paquete", "perdida", "pérdida", "ping", "telconet", "red"],
             "dmx_lighting": ["dmx", "luz", "luces", "iluminacion", "iluminación", "lighting", "artnet", "art-net", "escenario", "stage", "luminarias"],
-            "servers_rack": ["server", "servidor", "servidores", "rack", "edge", "cpu", "amd", "ryzen", "temperatura", "compute", "ag-41"],
+            "servers_rack": ["server", "servidor", "servidores", "servers", "rack", "edge", "cpu", "amd", "ryzen", "temperatura", "compute", "ag-41", "servicio", "servicios", "services", "home assistant", "memoria", "ram", "nodo"],
         }
 
         scores: dict[str, int] = {}
@@ -423,12 +423,19 @@ class HiggsRealtimeSession:
         elif target_sub == "network_wifi":
             aps = data.get("access_points", [])
             yard = next((ap for ap in aps if "SolarYard" in ap.get("ap_id", "")), {})
-            loss_desc = yard.get("status", "18% packet loss")
-            reply = (
-                f"La troncal UniFi Fiber WAN de Telconet está al 100% (1.0 Gbps, 3.8 ms de latencia), pero el punto de acceso AP-SolarYard en 2.4 GHz presenta degradación por interferencia ({loss_desc}). Si deseas puedo reiniciarlo vía PoE."
-                if is_spanish
-                else f"UniFi Telconet Fiber WAN is optimal at 1.0 Gbps (3.8 ms RTT), but AP-SolarYard on 2.4 GHz is degraded ({loss_desc}). I can propose a PoE power-cycle if requested."
-            )
+            status = yard.get("status", "OPTIMAL")
+            if "OPTIMAL" in status:
+                reply = (
+                    f"La red UniFi y la troncal de fibra Telconet de 1.0 Gbps están al 100%. Todos los puntos de acceso, incluido el AP-SolarYard, operan óptimamente con 0% de pérdida de paquetes tras el reinicio PoE."
+                    if is_spanish
+                    else f"UniFi network and 1.0 Gbps Telconet Fiber WAN are optimal. All access points including AP-SolarYard are operating cleanly with 0.0% packet loss."
+                )
+            else:
+                reply = (
+                    f"La troncal UniFi Fiber WAN de Telconet está al 100% (1.0 Gbps, 3.8 ms de latencia), pero el punto de acceso AP-SolarYard en 2.4 GHz presenta degradación por interferencia ({status}). Si deseas puedo reiniciarlo vía PoE."
+                    if is_spanish
+                    else f"UniFi Telconet Fiber WAN is optimal at 1.0 Gbps (3.8 ms RTT), but AP-SolarYard on 2.4 GHz is degraded ({status}). I can propose a PoE power-cycle if requested."
+                )
         elif target_sub == "dmx_lighting":
             scene = data.get("active_scene", "Normal Operations")
             reply = (
@@ -439,10 +446,13 @@ class HiggsRealtimeSession:
         elif target_sub == "servers_rack":
             temp = data.get("rack_ambient_temp_c", 24.1)
             cpu = data.get("cpu_load_avg", [0.42, 0.38, 0.35])
+            mem = data.get("memory_used_gb", 18.2)
+            services = data.get("services", [])
+            serv_names = ", ".join(f"{s.get('name')} ({s.get('status')})" for s in services[:3])
             reply = (
-                f"El nodo de cómputo AG-41 (acelerador AMD Radeon AI PRO R9700) está nominal. Temperatura ambiente de {temp} °C, carga de CPU en {cpu[0]} y registro de auditoría SHA-256 activo."
+                f"El nodo de cómputo AG-41 (AMD Ryzen 9 7900X + acelerador AMD Radeon AI PRO R9700) está en {temp} °C con {mem} GB de RAM en uso. Los servicios principales están en línea: {serv_names}."
                 if is_spanish
-                else f"Compute Node AG-41 (AMD Radeon AI PRO R9700) is nominal. Ambient temperature is {temp} °C, CPU load is {cpu[0]}, and SHA-256 forensic ledger is online."
+                else f"Compute Node AG-41 (AMD Ryzen 9 7900X + AMD Radeon AI PRO R9700) is running at {temp} °C with {mem} GB RAM in use. Core operational services are healthy: {serv_names}."
             )
         else:
             reply = (

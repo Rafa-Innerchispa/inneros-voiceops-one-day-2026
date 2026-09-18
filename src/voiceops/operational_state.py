@@ -51,6 +51,11 @@ class OperationalStateRegistry:
         self._registered_extensions.append(new_ext)
         return new_ext
 
+    _ap_solaryard_degraded: bool = True
+
+    def reset_ap_solaryard(self) -> None:
+        self._ap_solaryard_degraded = False
+
     def get_subsystem_telemetry(
         self,
         subsystem: str = "all",
@@ -73,8 +78,9 @@ class OperationalStateRegistry:
 
         # 3. Network Provider
         net_truth = "LIVE"
-        net_provider = "UniFi Cloud Gateway Ultra" if hass_url else "MikroTik CRS328-24P-4S+ Backbone"
-        net_status = "ALERT_ACTIVE"
+        net_provider = "UniFi Dream Machine & Cloud Gateway Ultra"
+        net_status = "ALERT_ACTIVE" if self._ap_solaryard_degraded else "OPTIMAL"
+        ap_yard_status = "DEGRADED (18% packet loss, channel interference detected)" if self._ap_solaryard_degraded else "OPTIMAL (0.0% packet loss, PoE power-cycled)"
 
         telemetry_map: dict[str, Any] = {
             "telephony": {
@@ -162,7 +168,7 @@ class OperationalStateRegistry:
                 "observed_at": _now_iso(),
                 "freshness_seconds": 0.4,
                 "location": "Guayaquil Field Operations Backbone",
-                "status": "ALERT_ACTIVE",
+                "status": net_status,
                 "primary_wan": "1.0 Gbps Fiber (Telconet GYE) - UniFi UDM WAN Online",
                 "backup_wan": "Claro LTE Emergency Cellular Backup (Standby)",
                 "access_points": [
@@ -171,7 +177,7 @@ class OperationalStateRegistry:
                         "ap_id": "AP-SolarYard",
                         "band": "2.4GHz / WiFi 6",
                         "clients": 4,
-                        "status": "DEGRADED (18% packet loss, channel interference detected)",
+                        "status": ap_yard_status,
                     },
                     {"ap_id": "AP-TelecomVault", "band": "5GHz / WiFi 6", "clients": 6, "status": "OPTIMAL"},
                 ],
@@ -200,10 +206,20 @@ class OperationalStateRegistry:
                 "location": "Guayaquil Rack 01 - Local Edge Node",
                 "status": "OPTIMAL",
                 "compute_host": "AMD Radeon AI PRO R9700 Edge Accelerator",
-                "audio_engine": "Boson AI Higgs Realtime S2S (Sub-125ms Interruption)",
+                "cpu_model": "AG-41 AMD Ryzen 9 7900X (12C/24T)",
+                "audio_engine": "Boson AI Higgs Realtime S2S (Sub-125ms Interruption Engine)",
                 "rack_ambient_temp_c": 24.1,
                 "rack_exhaust_temp_c": 31.8,
                 "cpu_load_avg": [0.42, 0.38, 0.35],
+                "memory_used_gb": 18.2,
+                "memory_total_gb": 64.0,
+                "services": [
+                    {"name": "Home Assistant Core REST API", "port": 8123, "status": "HEALTHY", "uptime": "14d 6h"},
+                    {"name": "Boson AI Higgs Realtime Audio S2S", "model": "Higgs Audio S2S", "latency_ms": 29, "status": "RUNNING"},
+                    {"name": "Physical Guardian VideoMotion Dispatcher", "channels": ["C1", "C2"], "fps": 30, "status": "ONLINE"},
+                    {"name": "Grandstream UCM6104 SIP Telephony Bridge", "protocol": "UDP 4321 / TCP 7777", "status": "ONLINE"},
+                    {"name": "Audit Fabric Cryptographic Ledger", "engine": "SHA-256 State-Bound", "status": "ONLINE"},
+                ],
                 "cryptographic_store": "ONLINE (SHA-256 Forensic Audit Fabric Active)",
             },
         }
@@ -337,6 +353,9 @@ class OperationalStateRegistry:
             "site": self.site_name,
             "executed_at": _now_iso(),
         }
+
+        if proposal.action_type == "restart_wifi_ap":
+            self.reset_ap_solaryard()
 
         result = ActionResult(
             action_id=action_id,
