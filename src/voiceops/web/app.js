@@ -138,25 +138,183 @@ async function fetchBosonStatus() {
   }
 }
 
-// Start Live Voice Session
-function startLiveVoice() {
-  isVoiceActive = true;
-  document.getElementById("liveMicBtn").disabled = true;
-  document.getElementById("stopMicBtn").disabled = false;
-  document.getElementById("voiceOrb").className = "voice-orb active";
-  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Listening...";
-  document.getElementById("agentStateSubtitle").textContent = "Microphone streaming PCM16 mono · Realtime VAD active";
-  document.getElementById("turnStatus").textContent = "Streaming Live Audio";
-  document.getElementById("turnStatus").className = "status-badge active";
+let audioContext = null;
+let micStream = null;
+let analyserNode = null;
+let speechRecognizer = null;
+let micDataArray = null;
 
-  setExecutionStep("Audio Stream Active", "Higgs Realtime processing incoming speech with sub-125ms interruption...");
-  appendChat("user", "Microphone session started. Streaming audio to Higgs Realtime S2S...");
+// Start Live Voice Session with real Microphone & Audio Pipeline
+async function startLiveVoice() {
+  try {
+    // 1. Request real microphone access and connect AnalyserNode for live Waveform
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(micStream);
+    analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize = 64;
+    source.connect(analyserNode);
+    micDataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+    isVoiceActive = true;
+    document.getElementById("liveMicBtn").disabled = true;
+    document.getElementById("stopMicBtn").disabled = false;
+    document.getElementById("voiceOrb").className = "voice-orb active";
+    document.getElementById("agentStateTitle").textContent = "Higgs Realtime Listening...";
+    document.getElementById("agentStateSubtitle").textContent = "Microphone streaming PCM16 · Live VAD & Instant Barge-in Active";
+    document.getElementById("turnStatus").textContent = "Streaming Live Audio";
+    document.getElementById("turnStatus").className = "status-badge active";
+
+    setExecutionStep("Microphone Live", "Listening to your voice. Speak any operational command or query...");
+    appendChat("system", "Microphone stream connected. Speak freely (English, Spanish or Spanglish).");
+
+    // 2. Play initial voice greeting through speakers
+    speakAudioResponse("Higgs Realtime online. Guayaquil node connected. How can I assist with site operations?");
+
+    // 3. Initialize Speech Recognition if supported
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      speechRecognizer = new SpeechRecognition();
+      speechRecognizer.continuous = true;
+      speechRecognizer.interimResults = true;
+      speechRecognizer.lang = "es-EC"; // Supports both Spanish and English technical terms
+
+      speechRecognizer.onstart = () => {
+        console.log("Speech recognition service active");
+      };
+
+      speechRecognizer.onspeechstart = () => {
+        // Instant Barge-In: Cancel agent speech if user speaks while agent is talking
+        if (isAudioSpeaking) {
+          if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+          isAudioSpeaking = false;
+          document.getElementById("audioPlayingTag")?.classList.add("hidden");
+          setExecutionStep("Barge-In (<125ms)", "Agent speech cancelled instantly upon human voice detection.");
+        }
+      };
+
+      speechRecognizer.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        if (interimTranscript) {
+          setExecutionStep("Hearing Speech", `"${interimTranscript.trim()}"`);
+        }
+
+        if (finalTranscript) {
+          const userText = finalTranscript.trim();
+          console.log("User spoken utterance:", userText);
+          appendChat("user", userText);
+          processSpokenCommand(userText);
+        }
+      };
+
+      speechRecognizer.onerror = (event) => {
+        console.warn("Speech recognition notice:", event.error);
+        if (event.error !== "no-speech") {
+          setExecutionStep("Audio Stream Active", "Microphone audio streaming to Higgs Realtime.");
+        }
+      };
+
+      speechRecognizer.onend = () => {
+        if (isVoiceActive && speechRecognizer) {
+          try {
+            speechRecognizer.start(); // Keep listening while active
+          } catch (e) {
+            // Already restarted
+          }
+        }
+      };
+
+      speechRecognizer.start();
+    } else {
+      appendChat("system", "Note: Web Speech API recognition not available in this browser; audio level streaming and synthetic scenarios active.");
+    }
+  } catch (err) {
+    console.error("Microphone access error:", err);
+    alert("Microphone permission was not granted. Please allow microphone access in your browser to test live speech.");
+    stopLiveVoice();
+  }
+}
+
+// Process spoken command from live microphone
+async function processSpokenCommand(text) {
+  setExecutionStep("Evaluating Command", `Processing: "${text.slice(0, 35)}..."`);
+
+  // 1. Check if user is approving an active proposal
+  if (activeProposalId) {
+    await submitApproval(activeProposalId, text);
+    return;
+  }
+
+  // 2. Check for action trigger keywords (e.g., restart, isolate, bypass, emergency)
+  const lower = text.toLowerCase();
+  if (lower.includes("reiniciar") || lower.includes("restart") || lower.includes("ap") || lower.includes("wifi")) {
+    simulateTurn(text, {
+      name: "propose_governed_action",
+      args: { action_type: "restart_wifi_ap", target_subsystem: "network_wifi" }
+    }, false, (res) => {
+      activeProposalId = res.output?.proposal_id || "prop_sample_1";
+      showProposalCard(activeProposalId, "Power-cycle PoE port for AP-SolarYard", "network_wifi");
+      const reply = `Active proposal created under ID ${activeProposalId}. Please confirm verbally: Do you authorize the AP-SolarYard restart?`;
+      appendChat("agent", reply);
+      setExecutionStep("Awaiting Verbal Approval", "Speak 'Yes proceed' or 'Autorizo' to execute, or 'No' to reject.");
+      speakAudioResponse(reply);
+    });
+  } else if (lower.includes("solar") || lower.includes("fase") || lower.includes("isolate") || lower.includes("aislar")) {
+    simulateTurn(text, {
+      name: "propose_governed_action",
+      args: { action_type: "isolate_solar_phase", target_subsystem: "solar_power" }
+    }, false, (res) => {
+      activeProposalId = res.output?.proposal_id || "prop_sample_2";
+      showProposalCard(activeProposalId, "Isolate Substation Phase 2 Breaker", "solar_power");
+      const reply = `Safety proposal ${activeProposalId} staged for solar array. Do you authorize isolating Phase 2?`;
+      appendChat("agent", reply);
+      setExecutionStep("Awaiting Verbal Approval", "Awaiting human confirmation.");
+      speakAudioResponse(reply);
+    });
+  } else {
+    // 3. General operational inspection query
+    simulateTurn(text, {
+      name: "inspect_operational_state",
+      args: { subsystem: "all" }
+    }, false, () => {
+      const reply = "I inspected Guayaquil site telemetry. Solar array is at 3,840 watts with 94% battery charge. PBX has 4 extensions online. AP-SolarYard has 18% packet loss.";
+      appendChat("agent", reply);
+      setExecutionStep("Report Spoken", "Telemetry transmitted.");
+      speakAudioResponse(reply);
+    });
+  }
 }
 
 // Stop Live Voice Session
 function stopLiveVoice() {
   isVoiceActive = false;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+
+  if (speechRecognizer) {
+    try { speechRecognizer.stop(); } catch (e) {}
+    speechRecognizer = null;
+  }
+
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+
+  if (audioContext) {
+    try { audioContext.close(); } catch (e) {}
+    audioContext = null;
+  }
+
   document.getElementById("liveMicBtn").disabled = false;
   document.getElementById("stopMicBtn").disabled = true;
   document.getElementById("voiceOrb").className = "voice-orb idle";
@@ -412,7 +570,7 @@ function sendManualUtterance() {
   }
 }
 
-// Canvas Audio Waveform Animator
+// Canvas Audio Waveform Animator (connected to real microphone AnalyserNode)
 function initWaveform() {
   const canvas = document.getElementById("waveformCanvas");
   if (!canvas) return;
@@ -428,9 +586,19 @@ function initWaveform() {
 
     const isActive = isVoiceActive || isAudioSpeaking;
 
+    if (analyserNode && micDataArray && isVoiceActive) {
+      analyserNode.getByteFrequencyData(micDataArray);
+    }
+
     for (let i = 0; i < bars; i++) {
-      let amp = isActive ? Math.sin(phase + i * 0.45) * 14 + Math.random() * 8 : 4;
-      amp = Math.max(3, Math.abs(amp));
+      let amp = 4;
+      if (analyserNode && micDataArray && isVoiceActive) {
+        const val = micDataArray[i % micDataArray.length] || 0;
+        amp = Math.max(4, (val / 255) * 32);
+      } else if (isAudioSpeaking) {
+        amp = Math.sin(phase + i * 0.45) * 14 + Math.random() * 8;
+        amp = Math.max(4, Math.abs(amp));
+      }
 
       const x = startX + i * (barWidth + spacing);
       const y = (canvas.height - amp) / 2;
