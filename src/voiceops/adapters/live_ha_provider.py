@@ -41,7 +41,94 @@ def _entity_map() -> dict[str, str]:
 def _ha_config() -> tuple[str, str]:
     base = (os.getenv("HASS_URL") or os.getenv("HOME_ASSISTANT_URL") or "").strip().rstrip("/")
     token = (os.getenv("HASS_TOKEN") or os.getenv("HOME_ASSISTANT_TOKEN") or "").strip()
+    if not base:
+        base = "http://192.168.1.4:8123"
     return base, token
+
+
+def _bridge_url() -> str:
+    return (
+        os.getenv("VOICEOPS_TELEMETRY_BRIDGE_URL")
+        or os.getenv("VOICEOPS_HA_BRIDGE_URL")
+        or "http://192.168.1.4:8875/api/telemetry"
+    ).strip()
+
+
+def _snapshot_from_runtime_bridge(
+    *,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 5.0,
+) -> dict[str, Any] | None:
+    """Use the .4 VoiceOps runtime as a read-only HA bridge when local token is absent."""
+    url = _bridge_url()
+    request = Request(url, method="GET")
+    try:
+        with opener(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except URLError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    subsystems = payload.get("subsystems")
+    if not isinstance(subsystems, dict):
+        return None
+    solar = subsystems.get("solar_power")
+    if not isinstance(solar, dict) or solar.get("truth") != "LIVE":
+        return None
+
+    readings: dict[str, Any] = {}
+    mapping = {
+        "solar_output_power": solar.get("solar_generation_watts") or solar.get("inverter_output_watts"),
+        "solar_battery_voltage": solar.get("battery_voltage_volts"),
+        "solar_battery_capacity": solar.get("battery_charge_pct"),
+        "solar_grid_voltage": solar.get("grid_voltage_volts"),
+        "breaker_power": solar.get("phase_a_power_watts"),
+        "breaker_current": solar.get("phase_a_current_amps"),
+    }
+    entities = _entity_map()
+    observed_at = str(solar.get("observed_at") or payload.get("query_timestamp") or "")
+    for label, value in mapping.items():
+        if value is None:
+            continue
+        readings[label] = {
+            "entity_id": entities.get(label, label),
+            "state": value,
+            "attributes": {},
+            "last_changed": observed_at,
+        }
+
+    alarm = subsystems.get("security_alarm")
+    if isinstance(alarm, dict) and alarm.get("truth") == "LIVE":
+        readings["alarm_panel"] = {
+            "entity_id": entities["alarm_panel"],
+            "state": alarm.get("arm_mode") or alarm.get("status") or "unknown",
+            "attributes": {},
+            "last_changed": str(alarm.get("observed_at") or observed_at),
+        }
+
+    net = subsystems.get("network_wifi")
+    if isinstance(net, dict) and net.get("truth") == "LIVE":
+        readings["unifi_wan"] = {
+            "entity_id": entities["unifi_wan"],
+            "state": "on" if net.get("wan_online") else "off",
+            "attributes": {},
+            "last_changed": str(net.get("observed_at") or observed_at),
+        }
+
+    if not readings:
+        return None
+
+    freshness = solar.get("freshness_seconds")
+    return {
+        "truth": "LIVE",
+        "source_provider": "Home Assistant Core REST API",
+        "bridge_source": url,
+        "observed_at": observed_at or None,
+        "freshness_seconds": freshness,
+        "readings": readings,
+        "errors": [],
+    }
 
 
 def fetch_entity_state(
@@ -108,6 +195,9 @@ def fetch_ha_snapshot(
             observed_at = changed
 
     if not readings:
+        bridged = _snapshot_from_runtime_bridge(opener=opener)
+        if bridged:
+            return bridged
         return {
             "truth": "UNVERIFIED",
             "source_provider": "Home Assistant Core REST API",

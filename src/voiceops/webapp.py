@@ -16,6 +16,9 @@ from urllib.request import Request, urlopen
 from .adapters.local_amd import LocalAMDReasoner
 from .audit import replay_summary
 from .gateway import VoiceGateway
+from .runtime_env import load_runtime_env
+
+load_runtime_env()
 
 
 MAX_BODY_BYTES = 16_384
@@ -680,6 +683,7 @@ def main() -> None:
         help="Enable short-lived browser Voice Agent tokens. Requires ASSEMBLYAI_API_KEY server-side.",
     )
     args = parser.parse_args()
+    load_runtime_env()
     server = VoiceOpsDemoServer(
         (args.host, args.port),
         gateway_factory=build_gateway_factory(args.reasoner),
