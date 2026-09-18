@@ -34,6 +34,8 @@ let micStream = null;
 let analyserNode = null;
 let micDataArray = null;
 let scriptProcessorNode = null;
+let silentGainNode = null;
+let recognition = null;
 let selectedVoice = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -118,15 +120,40 @@ function initVoiceProfiles() {
 
 // Speak text clearly using SpeechSynthesis + Web Audio fallback
 function speakText(text) {
-  if (!text) return;
+  if (!text || !window.speechSynthesis) return;
 
-  if (window.speechSynthesis) {
+  try {
     window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
     const utterance = new SpeechSynthesisUtterance(text);
+    const lower = text.toLowerCase();
+    const isSpanish = /[áéíóúñ¿¡]/.test(lower) || /\b(hola|cómo|alarma|servidor|inversor|red|sí|autorizo|falla|guayaquil|temperatura)\b/.test(lower);
+    const isFrench = /\b(bonjour|salut|serveur|merci|qui)\b/.test(lower);
+    const isGerman = /\b(hallo|server|danke|wer)\b/.test(lower);
+
+    if (isSpanish) {
+      utterance.lang = "es-ES";
+    } else if (isFrench) {
+      utterance.lang = "fr-FR";
+    } else if (isGerman) {
+      utterance.lang = "de-DE";
+    } else {
+      utterance.lang = "en-US";
+    }
+
+    const voices = window.speechSynthesis.getVoices();
     if (selectedVoice) {
       utterance.voice = selectedVoice;
+    } else if (voices && voices.length > 0) {
+      const prefix = isSpanish ? "es" : isFrench ? "fr" : isGerman ? "de" : "en";
+      const matching = voices.find((v) => v.lang.startsWith(prefix));
+      if (matching) utterance.voice = matching;
     }
-    utterance.rate = 1.05;
+
+    utterance.rate = 1.02;
     utterance.pitch = 0.95;
 
     utterance.onstart = () => {
@@ -148,6 +175,8 @@ function speakText(text) {
     };
 
     window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.error("SpeechSynthesis error:", err);
   }
 }
 
@@ -157,6 +186,44 @@ function setExecutionStep(label, detail) {
   const stepDetail = document.getElementById("activeStepDetail");
   if (stepLabel) stepLabel.textContent = label;
   if (stepDetail) stepDetail.textContent = detail;
+}
+
+// Initialize Speech Recognition for Realtime Voice to Text
+function initSpeechRecognition() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    console.warn("SpeechRecognition API not available in this browser. Using manual text fallback.");
+    return null;
+  }
+
+  const rec = new SpeechRec();
+  rec.continuous = true;
+  rec.interimResults = false;
+  rec.lang = "es-EC";
+
+  rec.onresult = (event) => {
+    const lastIndex = event.results.length - 1;
+    const transcript = event.results[lastIndex][0].transcript.trim();
+    if (transcript && transcript.length > 1) {
+      console.log("🎤 Voice recognized:", transcript);
+      appendChat("user", transcript);
+      processSpokenCommand(transcript);
+    }
+  };
+
+  rec.onerror = (err) => {
+    console.warn("Speech recognition notice:", err.error);
+  };
+
+  rec.onend = () => {
+    if (isVoiceActive) {
+      try {
+        rec.start();
+      } catch (e) {}
+    }
+  };
+
+  return rec;
 }
 
 // Fetch ephemeral token & initialize WebSocket connection for Higgs Realtime S2S
@@ -319,10 +386,14 @@ function triggerInstantBargeIn() {
   console.log("⚡ [Barge-In Triggered]: Realtime audio cut off in <50ms.");
 }
 
-// Start Live Voice Session with real Microphone & Audio Pipeline
+// Start Live Voice Session with real Microphone, Speech Recognition & Audio Pipeline
 async function startLiveVoice() {
   try {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const source = audioContext.createMediaStreamSource(micStream);
     analyserNode = audioContext.createAnalyser();
@@ -330,10 +401,14 @@ async function startLiveVoice() {
     source.connect(analyserNode);
     micDataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
-    // Stream raw PCM16 microphone samples to WebSocket
+    // Silent gain node to prevent speaker feedback loop
+    silentGainNode = audioContext.createGain();
+    silentGainNode.gain.value = 0;
+
     scriptProcessorNode = audioContext.createScriptProcessor(4096, 1, 1);
     source.connect(scriptProcessorNode);
-    scriptProcessorNode.connect(audioContext.destination);
+    scriptProcessorNode.connect(silentGainNode);
+    silentGainNode.connect(audioContext.destination);
 
     scriptProcessorNode.onaudioprocess = (e) => {
       if (!isVoiceActive) return;
@@ -353,7 +428,6 @@ async function startLiveVoice() {
       }
 
       if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
-        // Send base64 audio frame
         const bytes = new Uint8Array(pcm16.buffer);
         let binary = "";
         for (let j = 0; j < bytes.byteLength; j++) {
@@ -368,6 +442,16 @@ async function startLiveVoice() {
         );
       }
     };
+
+    // Start Web Speech Recognition
+    if (!recognition) {
+      recognition = initSpeechRecognition();
+    }
+    if (recognition) {
+      try {
+        recognition.start();
+      } catch (e) {}
+    }
 
     isVoiceActive = true;
     document.getElementById("liveMicBtn").disabled = true;
@@ -399,6 +483,12 @@ async function startLiveVoice() {
 function stopLiveVoice() {
   isVoiceActive = false;
   cancelAllAudioPlayback();
+
+  if (recognition) {
+    try {
+      recognition.stop();
+    } catch (e) {}
+  }
 
   if (scriptProcessorNode) {
     try {
