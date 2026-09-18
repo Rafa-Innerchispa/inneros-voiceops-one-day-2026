@@ -362,14 +362,14 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             if self.path == "/api/telephony/register-extension":
                 from .governed_tools import get_operational_registry
                 payload = self._read_json()
-                ext = str(payload.get("ext") or "").strip()
-                label = str(payload.get("label") or "Field Extension").strip()
+                ext = str(payload.get("extension") or payload.get("ext") or "").strip()
+                label = str(payload.get("label") or "Zoiper SIP Softphone").strip()
                 if not ext:
                     self._send_json({"error": "Extension number is required"}, status=HTTPStatus.BAD_REQUEST)
                     return
                 reg = get_operational_registry()
-                res = reg.register_extension(ext=ext, label=label)
-                self._send_json({"status": "REGISTERED", "extension": res, "total_registered": len(reg._registered_extensions)})
+                new_ext = reg.register_extension(ext=ext, label=label, status="ONLINE")
+                self._send_json({"ok": True, "registered_extension": new_ext, "all_extensions": list(reg._registered_extensions)})
                 return
             if self.path == "/api/governed/inspect":
                 from .governed_tools import inspect_operational_state
@@ -405,6 +405,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                     simulate_tool_call=tool_tuple,
                     simulate_interruption=sim_interruption,
                 )
+                self._send_json(sim_res)
+                return
             if self.path == "/api/boson/converse":
                 from .adapters.higgs_realtime import HiggsRealtimeSession
                 payload = self._read_json()

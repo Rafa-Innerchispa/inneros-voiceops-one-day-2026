@@ -155,10 +155,10 @@
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>PV Generation:</span><strong id="solGen">3,840 W</strong></div>
-                  <div class="data-row"><span>Battery Bank:</span><strong id="solBat">94% (52.4V)</strong></div>
-                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">110V / 60Hz GYE</strong></div>
-                  <div class="provider-sub" id="solProvider">Source: Growatt Hybrid SPF 5000 ES</div>
+                  <div class="data-row"><span>PV Generation:</span><strong id="solGen">529 W</strong></div>
+                  <div class="data-row"><span>Battery Bank:</span><strong id="solBat">100% (52.4V)</strong></div>
+                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">120.6V / 60Hz Guayaquil Grid</strong></div>
+                  <div class="provider-sub" id="solProvider">Source: Home Assistant / Xmart Inverter (Node AG-41)</div>
                 </div>
               </div>
 
@@ -176,9 +176,9 @@
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Hardware:</span><strong>UCM6104 (UDP 4321)</strong></div>
-                  <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100-103)</strong></div>
+                  <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100, 101, 102, 103)</strong></div>
                   <div class="data-row"><span>SIP Quality:</span><strong id="telQuality">Jitter 2.1ms (MOS 4.38)</strong></div>
-                  <div class="provider-sub" id="telProvider">Source: Grandstream AMI TCP 7777</div>
+                  <div class="provider-sub" id="telProvider">Source: Grandstream UCM6104 (UDP 4321 / TCP 7777 AMI)</div>
                 </div>
               </div>
 
@@ -197,8 +197,8 @@
                 <div class="subsystem-body">
                   <div class="data-row"><span>Fiber WAN:</span><strong id="netWan">1.0 Gbps (RTT 3.8ms)</strong></div>
                   <div class="data-row"><span>AP-SolarYard:</span><strong class="text-danger" id="netLoss">18.0% Packet Loss</strong></div>
-                  <div class="data-row"><span>Switch PoE:</span><strong id="netSwitch">MikroTik 68W (38.2°C)</strong></div>
-                  <div class="provider-sub" id="netProvider">Source: UniFi Cloud Gateway Ultra</div>
+                  <div class="data-row"><span>Gateway:</span><strong id="netSwitch">UniFi Gateway Ultra (Online)</strong></div>
+                  <div class="provider-sub" id="netProvider">Source: UniFi Dream Machine & Cloud Gateway Ultra</div>
                 </div>
               </div>
 
@@ -218,16 +218,16 @@
                   <div class="data-row"><span>Partition:</span><strong>Panel Home Ralphi (0)</strong></div>
                   <div class="data-row"><span>Perimeter Zones:</span><strong id="alarmZones">10 Zones Monitored</strong></div>
                   <div class="data-row"><span>Alarm Trigger:</span><strong id="alarmTrigger">NORMAL (No Breach)</strong></div>
-                  <div class="provider-sub" id="alarmProvider">Source: Intelbras Guardian / HA API</div>
+                  <div class="provider-sub" id="alarmProvider">Source: Home Assistant / Intelbras Guardian API</div>
                 </div>
               </div>
 
-              <!-- Dahua Surveillance & Motion Card -->
+              <!-- Video Surveillance Card -->
               <div class="subsystem-card" id="cardCameras">
                 <div class="subsystem-head">
                   <div class="subsystem-title">
-                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    <strong>Dahua NVR & Surveillance</strong>
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                    <strong>Dahua Video Surveillance</strong>
                   </div>
                   <div class="head-badges">
                     <span class="truth-badge live" id="camTruth">LIVE</span>
@@ -235,10 +235,10 @@
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>Host:</span><strong>192.168.1.100 (NVR Dahua)</strong></div>
-                  <div class="data-row"><span>Channels:</span><strong id="camChannels">C2 Acceso Norte · C3 Patio</strong></div>
-                  <div class="data-row"><span>Motion Dispatch:</span><strong id="camMotion">VideoMotion Stream Online</strong></div>
-                  <div class="provider-sub" id="camProvider">Source: Physical Guardian / Dahua</div>
+                  <div class="data-row"><span>Channels:</span><strong id="camChannels">C1 Acceso Principal · C2 Patio Exterior</strong></div>
+                  <div class="data-row"><span>Motion Event:</span><strong class="text-success" id="camMotion">VideoMotion Stream Online</strong></div>
+                  <div class="data-row"><span>NVR Host:</span><strong>192.168.1.100 (30 FPS)</strong></div>
+                  <div class="provider-sub" id="camProvider">Source: Physical Guardian / Dahua Technology Core</div>
                 </div>
               </div>
 

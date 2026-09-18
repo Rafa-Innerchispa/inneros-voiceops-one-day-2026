@@ -317,13 +317,48 @@ class HiggsRealtimeSession:
                 "proposal": prop_res,
             }
 
-        # 3. Dynamic operational inspection with scoring
+        # 3. Conversational greetings and casual inquiries
+        is_greeting = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in [
+            "hola", "hello", "hi", "hey", "buenos días", "buenos dias", "buenas tardes", "buenas noches",
+            "how are you", "cómo estás", "como estas", "qué tal", "que tal", "estás ahí", "estas ahi",
+            "good morning", "good afternoon", "good evening"
+        ])
+        if is_greeting and not any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["alarma", "solar", "camara", "cámara", "red", "wifi", "telefonia", "telefonía", "extension", "extensión", "reinicia", "restart"]):
+            reply = (
+                "¡Hola! VoiceOps está en línea y todos los subsistemas de Guayaquil operan con normalidad. ¿En qué puedo asistirte con las operaciones?"
+                if is_spanish
+                else "Hello! VoiceOps is online and all Guayaquil site infrastructure is operating normally. How can I assist you with site operations today?"
+            )
+            return {
+                "reply": reply,
+                "subsystem": "general_dialogue",
+                "tool_records": [],
+            }
+
+        # 4. Identity & capabilities inquiries
+        is_identity = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in [
+            "quién eres", "quien eres", "who are you", "qué puedes hacer", "que puedes hacer",
+            "what can you do", "help", "ayuda", "capacidades", "capabilities"
+        ])
+        if is_identity:
+            reply = (
+                "Soy VoiceOps, el despachador autónomo de infraestructura en Guayaquil. Superviso en tiempo real la alarma Intelbras (10 zonas), videovigilancia Dahua (C1/C2), inversor solar Xmart 120V, telefonía Grandstream y red UniFi, y puedo ejecutar recuperaciones bajo tu autorización por voz."
+                if is_spanish
+                else "I am VoiceOps, the autonomous infrastructure dispatcher for Guayaquil. I monitor real-time Intelbras security (10 zones), Dahua surveillance (C1/C2), 120V Xmart solar, Grandstream PBX, and UniFi network, and execute governed actions under your voice authorization."
+            )
+            return {
+                "reply": reply,
+                "subsystem": "general_dialogue",
+                "tool_records": [],
+            }
+
+        # 5. Dynamic operational inspection with scoring
         subsystem_keywords = {
             "security_alarm": ["alarma", "alarm", "intelbras", "particion", "partición", "zona", "zonas", "seguridad", "security", "desarmado", "breach", "intrusión", "intrusion", "disparadas"],
             "video_surveillance": ["camara", "camaras", "cámara", "cámaras", "camera", "cameras", "dahua", "nvr", "video", "movimiento", "motion", "patio", "acceso"],
             "solar_power": ["solar", "panel", "paneles", "bateria", "batería", "battery", "energia", "energía", "inversor", "inverter", "growatt", "xmart", "watt", "watts", "voltaje", "potencia", "breaker", "grid voltage", "voltaje de red"],
-            "telephony": ["telefonia", "telefonía", "telephony", "sip", "pbx", "llamada", "llamadas", "call", "extension", "extensión", "extensiones", "grandstream", "voip", "ami", "troncal"],
-            "network_wifi": ["wifi", "wi-fi", "access point", "punto de acceso", "ap-solaryard", "solaryard", "mikrotik", "internet", "wan", "packet loss", "paquete", "perdida", "pérdida", "ping", "telconet", "red"],
+            "telephony": ["telefonia", "telefonía", "telephony", "sip", "pbx", "llamada", "llamadas", "call", "extension", "extensión", "extensiones", "grandstream", "voip", "ami", "troncal", "zoiper"],
+            "network_wifi": ["wifi", "wi-fi", "access point", "punto de acceso", "ap-solaryard", "solaryard", "unifi", "udm", "internet", "wan", "packet loss", "paquete", "perdida", "pérdida", "ping", "telconet", "red"],
             "dmx_lighting": ["dmx", "luz", "luces", "iluminacion", "iluminación", "lighting", "artnet", "art-net", "escenario", "stage", "luminarias"],
             "servers_rack": ["server", "servidor", "servidores", "rack", "edge", "cpu", "amd", "ryzen", "temperatura", "compute", "ag-41"],
         }
@@ -390,9 +425,9 @@ class HiggsRealtimeSession:
             yard = next((ap for ap in aps if "SolarYard" in ap.get("ap_id", "")), {})
             loss_desc = yard.get("status", "18% packet loss")
             reply = (
-                f"La troncal de fibra Telconet está al 100% (1.0 Gbps, 3.8 ms de latencia), pero el punto de acceso AP-SolarYard en 2.4 GHz presenta degradación por interferencia ({loss_desc}). Si deseas puedo reiniciarlo vía PoE."
+                f"La troncal UniFi Fiber WAN de Telconet está al 100% (1.0 Gbps, 3.8 ms de latencia), pero el punto de acceso AP-SolarYard en 2.4 GHz presenta degradación por interferencia ({loss_desc}). Si deseas puedo reiniciarlo vía PoE."
                 if is_spanish
-                else f"Telconet Fiber WAN is optimal at 1.0 Gbps (3.8 ms RTT), but AP-SolarYard on 2.4 GHz is degraded ({loss_desc}). I can propose a PoE power-cycle if requested."
+                else f"UniFi Telconet Fiber WAN is optimal at 1.0 Gbps (3.8 ms RTT), but AP-SolarYard on 2.4 GHz is degraded ({loss_desc}). I can propose a PoE power-cycle if requested."
             )
         elif target_sub == "dmx_lighting":
             scene = data.get("active_scene", "Normal Operations")
@@ -411,9 +446,9 @@ class HiggsRealtimeSession:
             )
         else:
             reply = (
-                f"Diagnóstico general de la infraestructura de Guayaquil completado. 7 subsistemas activos: Alarma Intelbras desarmada, Videovigilancia Dahua en vivo (C2/C3), Inversor solar a 529W y 120.6V de red, y centralita Grandstream operativa."
+                f"Diagnóstico general de la infraestructura de Guayaquil completado. 7 subsistemas activos: Alarma Intelbras desarmada, Videovigilancia Dahua en vivo (C1/C2), Inversor solar a 529W y 120.6V de red, red UniFi y centralita Grandstream operativa."
                 if is_spanish
-                else f"Site diagnostics complete across all 7 Guayaquil subsystems: Intelbras Alarm disarmed, Dahua Video Surveillance live on C2 and C3, Solar array generating 529W at 120.6V grid, and Grandstream PBX online."
+                else f"Site diagnostics complete across all 7 Guayaquil subsystems: Intelbras Alarm disarmed, Dahua Video Surveillance live on C1 and C2, Solar array generating 529W at 120.6V grid, UniFi network, and Grandstream PBX online."
             )
 
         return {

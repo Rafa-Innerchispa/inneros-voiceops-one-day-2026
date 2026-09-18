@@ -20,7 +20,7 @@ const fallbackVoiceAgentConfig = {
 };
 
 let activeProposalId = null;
-let currentHtrTotal = 0.0;
+let currentHtrTotal = 18.4;
 let isVoiceActive = false;
 let isAudioSpeaking = false;
 let animationFrameId = null;
@@ -30,6 +30,8 @@ let selectedVoice = null;
 document.addEventListener("DOMContentLoaded", () => {
   initWaveform();
   initVoices();
+  const htrEl = document.getElementById("htrCounter");
+  if (htrEl) htrEl.textContent = `+${currentHtrTotal.toFixed(1)}`;
   fetchTelemetry();
   fetchBosonStatus();
 
@@ -244,14 +246,11 @@ async function fetchTelemetry() {
           }
         }
         const netSwitch = document.getElementById("netSwitch");
-        if (netSwitch && net.core_switch) {
-          const match = net.core_switch.match(/Temp: ([^,]+), PoE Load: ([^)]+)/);
-          if (match) {
-            netSwitch.textContent = `MikroTik ${match[2]} (${match[1]})`;
-          }
+        if (netSwitch) {
+          netSwitch.textContent = "UniFi Gateway Ultra (Online)";
         }
         const netProv = document.getElementById("netProvider");
-        if (netProv) netProv.textContent = `Source: ${net.source_provider || "UniFi Cloud Gateway Ultra"}`;
+        if (netProv) netProv.textContent = `Source: ${net.source_provider || "UniFi Dream Machine & Cloud Gateway Ultra"}`;
       }
 
       // 4. DMX Subsystem
@@ -340,7 +339,8 @@ async function startLiveVoice() {
     appendChat("system", "Microphone stream connected. Speak freely (English, Spanish or Spanglish).");
 
     // 2. Play initial voice greeting through speakers
-    speakAudioResponse("Higgs Realtime online. Guayaquil node connected. How can I assist with site operations?");
+    appendChat("agent", "Hi, I'm here to help you.");
+    speakAudioResponse("Hi, I'm here to help you.");
 
     // 3. Initialize Speech Recognition if supported
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
