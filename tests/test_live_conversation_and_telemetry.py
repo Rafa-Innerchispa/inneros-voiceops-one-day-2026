@@ -133,3 +133,32 @@ def test_webapp_token_and_endpoints() -> None:
             assert "Causa Raíz" in data["root_cause"]
     finally:
         server.shutdown()
+
+
+def test_servers_query_inspects_compute_node() -> None:
+    session = HiggsRealtimeSession()
+    res = session.converse("¿Cómo están mis servidores y qué servicios están corriendo?")
+    assert len(res["tool_records"]) > 0
+    assert res["tool_records"][0]["tool_name"] == "inspect_operational_state"
+    assert res["tool_records"][0]["arguments"]["subsystem"] == "servers_rack"
+    assert "AG-41" in res["reply"] or "Ryzen" in res["reply"]
+    assert "RAM" in res["reply"] or "servicios" in res["reply"]
+
+
+def test_multilingual_french_and_german() -> None:
+    session = HiggsRealtimeSession()
+    # French server inquiry
+    res_fr = session.converse("Bonjour, quel est l'état des serveurs ?")
+    assert "AG-41" in res_fr["reply"] or "serveur" in res_fr["reply"].lower()
+
+    # French identity inquiry
+    res_fr_id = session.converse("Qui es-tu ?")
+    assert "VoiceOps" in res_fr_id["reply"]
+
+    # German server inquiry
+    res_de = session.converse("Hallo, wie ist der Status der Server?")
+    assert "AG-41" in res_de["reply"] or "Server" in res_de["reply"]
+
+    # German identity inquiry
+    res_de_id = session.converse("Wer bist du?")
+    assert "VoiceOps" in res_de_id["reply"]
