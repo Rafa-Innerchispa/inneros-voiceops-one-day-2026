@@ -1,0 +1,35 @@
+STDOUT:
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"logging":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true},"extensions":{"io.modelcontextprotocol/ui":{}}},"serverInfo":{"name":"Ralphi-IA-MCP","version":"3.5.0"},"instructions":"Puente MCP entre ChatGPT y MongoDB pcdoctor_swarm + memoria ai_coordination. Al iniciar sesión SIEMPRE (sin que Rafael pegue nada): get_coordination_live() → read_coordination_file('HUB/ESTADO_VIVO.md') → read_coordination_file('HUB/RUNBOOK_COTIZACION_WHATSAPP.md') → bootstrap_context(). Cotizar: list_mcp_tool_profiles() perfil quoter; seguir RUNBOOK HUB. Si revision subió, releer mandatory_reads. Órdenes: fila en Notion DB RalfIA Coordination O create_ops_task. La ruta canónica de ChatGPT es chatgpt/INBOX.md con espejo ChatGPT/INBOX.md. Si file y Mongo divergen, la verdad de entrega vive en Mongo ralfia_agent_messages y luego se resynca Markdown. Usa search/fetch para Mongo, read_coordination_file/search_coordination_docs para docs del servidor. Agentes — lenguaje natural: resolve_agent(mensaje) → route_agent_request(mensaje, auto_execute=true). Catálogo: get_agent_catalog(). Orquestador principal AG-25: ralfia_dispatch(mensaje, auto_execute=true). dispatch_local_agent ejecuta por defecto (dry_run=true solo preview). Al cerrar: log_coordination_event(agent=CHATGPT) + save_chatgpt_note o chatgpt/OUTBOX vía nota. No hay OpenAI API en el servidor."}}
+
+
+STDERR:
+[24304] Using callback hostname: 127.0.0.1
+[24304] Using static OAuth client metadata from string
+[24304] Using specified callback port: 3334
+[24304] Discovering OAuth server configuration...
+[24304] Discovered authorization server: https://auth.pcdoctor.ai
+[24304] [24304] Connecting to remote server: https://mcp.pcdoctor.ai/mcp
+[24304] Using transport strategy: http-first
+[24304] Connected to remote server using StreamableHTTPClientTransport
+[24304] Local STDIO server running
+[24304] Proxy established successfully between local STDIO and remote StreamableHTTPClientTransport
+[24304] Press Ctrl+C to exit
+[24304] [Local→Remote] initialize
+[24304] {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "test-client (via mcp-remote 0.1.34)",
+      "version": "1.0.0"
+    }
+  }
+}
+[24304] [Remote→Local] 1
+[24304] [Local→Remote] notifications/initialized
+[24304] [Local→Remote] tools/list
+[24304] [Remote→Local] 2
+

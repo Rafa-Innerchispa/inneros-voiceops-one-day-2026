@@ -1,0 +1,58 @@
+{
+  "1": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {
+        "experimental": {},
+        "logging": {},
+        "prompts": {
+          "listChanged": true
+        },
+        "resources": {
+          "subscribe": false,
+          "listChanged": true
+        },
+        "tools": {
+          "listChanged": true
+        },
+        "extensions": {
+          "io.modelcontextprotocol/ui": {}
+        }
+      },
+      "serverInfo": {
+        "name": "Ralphi-IA-MCP",
+        "version": "3.5.0"
+      },
+      "instructions": "Puente MCP entre ChatGPT y MongoDB pcdoctor_swarm + memoria ai_coordination. Al iniciar sesión SIEMPRE (sin que Rafael pegue nada): get_coordination_live() → read_coordination_file('HUB/ESTADO_VIVO.md') → read_coordination_file('HUB/RUNBOOK_COTIZACION_WHATSAPP.md') → bootstrap_context(). Cotizar: list_mcp_tool_profiles() perfil quoter; seguir RUNBOOK HUB. Si revision subió, releer mandatory_reads. Órdenes: fila en Notion DB RalfIA Coordination O create_ops_task. La ruta canónica de ChatGPT es chatgpt/INBOX.md con espejo ChatGPT/INBOX.md. Si file y Mongo divergen, la verdad de entrega vive en Mongo ralfia_agent_messages y luego se resynca Markdown. Usa search/fetch para Mongo, read_coordination_file/search_coordination_docs para docs del servidor. Agentes — lenguaje natural: resolve_agent(mensaje) → route_agent_request(mensaje, auto_execute=true). Catálogo: get_agent_catalog(). Orquestador principal AG-25: ralfia_dispatch(mensaje, auto_execute=true). dispatch_local_agent ejecuta por defecto (dry_run=true solo preview). Al cerrar: log_coordination_event(agent=CHATGPT) + save_chatgpt_note o chatgpt/OUTBOX vía nota. No hay OpenAI API en el servidor."
+    }
+  },
+  "100": {
+    "jsonrpc": "2.0",
+    "id": 100,
+    "error": {
+      "code": -32602,
+      "message": "Invalid request parameters",
+      "data": ""
+    }
+  },
+  "101": {
+    "jsonrpc": "2.0",
+    "id": 101,
+    "error": {
+      "code": -32602,
+      "message": "Invalid request parameters",
+      "data": ""
+    }
+  },
+  "102": {
+    "jsonrpc": "2.0",
+    "id": 102,
+    "error": {
+      "code": -32602,
+      "message": "Invalid request parameters",
+      "data": ""
+    }
+  }
+}

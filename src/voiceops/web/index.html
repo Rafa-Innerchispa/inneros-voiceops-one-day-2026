@@ -202,6 +202,46 @@
                 </div>
               </div>
 
+              <!-- Security Alarm Card -->
+              <div class="subsystem-card" id="cardAlarm">
+                <div class="subsystem-head">
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <strong>Intelbras Security Alarm</strong>
+                  </div>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="alarmTruth">LIVE</span>
+                    <span class="status-indicator optimal" id="alarmStatus">DISARMED</span>
+                  </div>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Partition:</span><strong>Panel Home Ralphi (0)</strong></div>
+                  <div class="data-row"><span>Perimeter Zones:</span><strong id="alarmZones">10 Zones Monitored</strong></div>
+                  <div class="data-row"><span>Alarm Trigger:</span><strong id="alarmTrigger">NORMAL (No Breach)</strong></div>
+                  <div class="provider-sub" id="alarmProvider">Source: Intelbras Guardian / HA API</div>
+                </div>
+              </div>
+
+              <!-- Dahua Surveillance & Motion Card -->
+              <div class="subsystem-card" id="cardCameras">
+                <div class="subsystem-head">
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <strong>Dahua NVR & Surveillance</strong>
+                  </div>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="camTruth">LIVE</span>
+                    <span class="status-indicator optimal" id="camStatus">ACTIVE</span>
+                  </div>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Host:</span><strong>192.168.1.100 (NVR Dahua)</strong></div>
+                  <div class="data-row"><span>Channels:</span><strong id="camChannels">C2 Acceso Norte · C3 Patio</strong></div>
+                  <div class="data-row"><span>Motion Dispatch:</span><strong id="camMotion">VideoMotion Stream Online</strong></div>
+                  <div class="provider-sub" id="camProvider">Source: Physical Guardian / Dahua</div>
+                </div>
+              </div>
+
               <!-- DMX Lighting Card -->
               <div class="subsystem-card" id="cardDmx">
                 <div class="subsystem-head">

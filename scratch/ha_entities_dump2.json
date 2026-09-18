@@ -1,0 +1,414 @@
+{
+  "1": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {
+        "experimental": {},
+        "logging": {},
+        "prompts": {
+          "listChanged": true
+        },
+        "resources": {
+          "subscribe": false,
+          "listChanged": true
+        },
+        "tools": {
+          "listChanged": true
+        },
+        "extensions": {
+          "io.modelcontextprotocol/ui": {}
+        }
+      },
+      "serverInfo": {
+        "name": "Ralphi-IA-MCP",
+        "version": "3.5.0"
+      },
+      "instructions": "Puente MCP entre ChatGPT y MongoDB pcdoctor_swarm + memoria ai_coordination. Al iniciar sesión SIEMPRE (sin que Rafael pegue nada): get_coordination_live() → read_coordination_file('HUB/ESTADO_VIVO.md') → read_coordination_file('HUB/RUNBOOK_COTIZACION_WHATSAPP.md') → bootstrap_context(). Cotizar: list_mcp_tool_profiles() perfil quoter; seguir RUNBOOK HUB. Si revision subió, releer mandatory_reads. Órdenes: fila en Notion DB RalfIA Coordination O create_ops_task. La ruta canónica de ChatGPT es chatgpt/INBOX.md con espejo ChatGPT/INBOX.md. Si file y Mongo divergen, la verdad de entrega vive en Mongo ralfia_agent_messages y luego se resynca Markdown. Usa search/fetch para Mongo, read_coordination_file/search_coordination_docs para docs del servidor. Agentes — lenguaje natural: resolve_agent(mensaje) → route_agent_request(mensaje, auto_execute=true). Catálogo: get_agent_catalog(). Orquestador principal AG-25: ralfia_dispatch(mensaje, auto_execute=true). dispatch_local_agent ejecuta por defecto (dry_run=true solo preview). Al cerrar: log_coordination_event(agent=CHATGPT) + save_chatgpt_note o chatgpt/OUTBOX vía nota. No hay OpenAI API en el servidor."
+    }
+  },
+  "10": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.inneros_pi01_solar_output_power\",\"state\":\"529\",\"attributes\":{\"friendly_name\":\"InnerOS Pi01 Solar Status\",\"device_model\":\"Xmart XSI-BB-120-3K-24-MPP\",\"protocol\":\"PI30\",\"usb_vid_pid\":\"0665:5161\",\"source_node\":\"InnerOs-Pi01\",\"updated_at\":\"2026-09-18T19:40:25.347802+00:00\",\"safety\":\"read_only_queries_only\",\"raw_field_count\":21,\"mode_inferred\":{\"mode\":\"utility_present_solar_charging\",\"grid_present\":true,\"output_present\":true,\"battery_mode\":false,\"pv_charging\":true,\"battery_discharging\":false},\"source_field\":\"ac_output_active_power_w\",\"unit_of_measurement\":\"W\",\"state_class\":\"measurement\",\"device_class\":\"power\"},\"last_changed\":\"2026-09-18T19:40:25.483757+00:00\",\"last_reported\":\"2026-09-18T19:40:25.483757+00:00\",\"last_updated\":\"2026-09-18T19:40:25.483757+00:00\",\"context\":{\"id\":\"01M2V0HKGBJPWR6PPWJ8V61BN3\",\"parent_id\":null,\"user_id\":\"755fb43770ea404b8263c7f397a0b4ec\"}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.inneros_pi01_solar_output_power",
+          "state": "529",
+          "attributes": {
+            "friendly_name": "InnerOS Pi01 Solar Status",
+            "device_model": "Xmart XSI-BB-120-3K-24-MPP",
+            "protocol": "PI30",
+            "usb_vid_pid": "0665:5161",
+            "source_node": "InnerOs-Pi01",
+            "updated_at": "2026-09-18T19:40:25.347802+00:00",
+            "safety": "read_only_queries_only",
+            "raw_field_count": 21,
+            "mode_inferred": {
+              "mode": "utility_present_solar_charging",
+              "grid_present": true,
+              "output_present": true,
+              "battery_mode": false,
+              "pv_charging": true,
+              "battery_discharging": false
+            },
+            "source_field": "ac_output_active_power_w",
+            "unit_of_measurement": "W",
+            "state_class": "measurement",
+            "device_class": "power"
+          },
+          "last_changed": "2026-09-18T19:40:25.483757+00:00",
+          "last_reported": "2026-09-18T19:40:25.483757+00:00",
+          "last_updated": "2026-09-18T19:40:25.483757+00:00",
+          "context": {
+            "id": "01M2V0HKGBJPWR6PPWJ8V61BN3",
+            "parent_id": null,
+            "user_id": "755fb43770ea404b8263c7f397a0b4ec"
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "11": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.inneros_pi01_solar_pv_voltage\",\"state\":\"65.7\",\"attributes\":{\"friendly_name\":\"InnerOS Pi01 Solar Status\",\"device_model\":\"Xmart XSI-BB-120-3K-24-MPP\",\"protocol\":\"PI30\",\"usb_vid_pid\":\"0665:5161\",\"source_node\":\"InnerOs-Pi01\",\"updated_at\":\"2026-09-18T19:40:25.347802+00:00\",\"safety\":\"read_only_queries_only\",\"raw_field_count\":21,\"mode_inferred\":{\"mode\":\"utility_present_solar_charging\",\"grid_present\":true,\"output_present\":true,\"battery_mode\":false,\"pv_charging\":true,\"battery_discharging\":false},\"source_field\":\"pv_input_voltage_v\",\"unit_of_measurement\":\"V\",\"state_class\":\"measurement\",\"device_class\":\"voltage\"},\"last_changed\":\"2026-09-18T19:40:25.550523+00:00\",\"last_reported\":\"2026-09-18T19:40:25.550523+00:00\",\"last_updated\":\"2026-09-18T19:40:25.550523+00:00\",\"context\":{\"id\":\"01M2V0HKJEMEHCAX958EHPTJ3E\",\"parent_id\":null,\"user_id\":\"755fb43770ea404b8263c7f397a0b4ec\"}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.inneros_pi01_solar_pv_voltage",
+          "state": "65.7",
+          "attributes": {
+            "friendly_name": "InnerOS Pi01 Solar Status",
+            "device_model": "Xmart XSI-BB-120-3K-24-MPP",
+            "protocol": "PI30",
+            "usb_vid_pid": "0665:5161",
+            "source_node": "InnerOs-Pi01",
+            "updated_at": "2026-09-18T19:40:25.347802+00:00",
+            "safety": "read_only_queries_only",
+            "raw_field_count": 21,
+            "mode_inferred": {
+              "mode": "utility_present_solar_charging",
+              "grid_present": true,
+              "output_present": true,
+              "battery_mode": false,
+              "pv_charging": true,
+              "battery_discharging": false
+            },
+            "source_field": "pv_input_voltage_v",
+            "unit_of_measurement": "V",
+            "state_class": "measurement",
+            "device_class": "voltage"
+          },
+          "last_changed": "2026-09-18T19:40:25.550523+00:00",
+          "last_reported": "2026-09-18T19:40:25.550523+00:00",
+          "last_updated": "2026-09-18T19:40:25.550523+00:00",
+          "context": {
+            "id": "01M2V0HKJEMEHCAX958EHPTJ3E",
+            "parent_id": null,
+            "user_id": "755fb43770ea404b8263c7f397a0b4ec"
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "12": {
+    "jsonrpc": "2.0",
+    "id": 12,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.inneros_pi01_solar_load\",\"state\":\"22\",\"attributes\":{\"friendly_name\":\"InnerOS Pi01 Solar Status\",\"device_model\":\"Xmart XSI-BB-120-3K-24-MPP\",\"protocol\":\"PI30\",\"usb_vid_pid\":\"0665:5161\",\"source_node\":\"InnerOs-Pi01\",\"updated_at\":\"2026-09-18T19:40:25.347802+00:00\",\"safety\":\"read_only_queries_only\",\"raw_field_count\":21,\"mode_inferred\":{\"mode\":\"utility_present_solar_charging\",\"grid_present\":true,\"output_present\":true,\"battery_mode\":false,\"pv_charging\":true,\"battery_discharging\":false},\"source_field\":\"output_load_percent\",\"unit_of_measurement\":\"%\",\"state_class\":\"measurement\"},\"last_changed\":\"2026-09-18T19:40:25.517260+00:00\",\"last_reported\":\"2026-09-18T19:40:25.517260+00:00\",\"last_updated\":\"2026-09-18T19:40:25.517260+00:00\",\"context\":{\"id\":\"01M2V0HKHD80C8TPQMA8JTVR77\",\"parent_id\":null,\"user_id\":\"755fb43770ea404b8263c7f397a0b4ec\"}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.inneros_pi01_solar_load",
+          "state": "22",
+          "attributes": {
+            "friendly_name": "InnerOS Pi01 Solar Status",
+            "device_model": "Xmart XSI-BB-120-3K-24-MPP",
+            "protocol": "PI30",
+            "usb_vid_pid": "0665:5161",
+            "source_node": "InnerOs-Pi01",
+            "updated_at": "2026-09-18T19:40:25.347802+00:00",
+            "safety": "read_only_queries_only",
+            "raw_field_count": 21,
+            "mode_inferred": {
+              "mode": "utility_present_solar_charging",
+              "grid_present": true,
+              "output_present": true,
+              "battery_mode": false,
+              "pv_charging": true,
+              "battery_discharging": false
+            },
+            "source_field": "output_load_percent",
+            "unit_of_measurement": "%",
+            "state_class": "measurement"
+          },
+          "last_changed": "2026-09-18T19:40:25.517260+00:00",
+          "last_reported": "2026-09-18T19:40:25.517260+00:00",
+          "last_updated": "2026-09-18T19:40:25.517260+00:00",
+          "context": {
+            "id": "01M2V0HKHD80C8TPQMA8JTVR77",
+            "parent_id": null,
+            "user_id": "755fb43770ea404b8263c7f397a0b4ec"
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "13": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.inneros_pi01_solar_temperature\",\"state\":\"41\",\"attributes\":{\"friendly_name\":\"InnerOS Pi01 Solar Status\",\"device_model\":\"Xmart XSI-BB-120-3K-24-MPP\",\"protocol\":\"PI30\",\"usb_vid_pid\":\"0665:5161\",\"source_node\":\"InnerOs-Pi01\",\"updated_at\":\"2026-09-18T19:40:25.347802+00:00\",\"safety\":\"read_only_queries_only\",\"raw_field_count\":21,\"mode_inferred\":{\"mode\":\"utility_present_solar_charging\",\"grid_present\":true,\"output_present\":true,\"battery_mode\":false,\"pv_charging\":true,\"battery_discharging\":false},\"source_field\":\"inverter_heat_sink_temperature_c\",\"unit_of_measurement\":\"°C\",\"state_class\":\"measurement\",\"device_class\":\"temperature\"},\"last_changed\":\"2026-09-18T18:59:47.601554+00:00\",\"last_reported\":\"2026-09-18T19:40:25.583252+00:00\",\"last_updated\":\"2026-09-18T19:40:25.583252+00:00\",\"context\":{\"id\":\"01M2V0HKKFPHYGV3688FD349XN\",\"parent_id\":null,\"user_id\":\"755fb43770ea404b8263c7f397a0b4ec\"}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.inneros_pi01_solar_temperature",
+          "state": "41",
+          "attributes": {
+            "friendly_name": "InnerOS Pi01 Solar Status",
+            "device_model": "Xmart XSI-BB-120-3K-24-MPP",
+            "protocol": "PI30",
+            "usb_vid_pid": "0665:5161",
+            "source_node": "InnerOs-Pi01",
+            "updated_at": "2026-09-18T19:40:25.347802+00:00",
+            "safety": "read_only_queries_only",
+            "raw_field_count": 21,
+            "mode_inferred": {
+              "mode": "utility_present_solar_charging",
+              "grid_present": true,
+              "output_present": true,
+              "battery_mode": false,
+              "pv_charging": true,
+              "battery_discharging": false
+            },
+            "source_field": "inverter_heat_sink_temperature_c",
+            "unit_of_measurement": "°C",
+            "state_class": "measurement",
+            "device_class": "temperature"
+          },
+          "last_changed": "2026-09-18T18:59:47.601554+00:00",
+          "last_reported": "2026-09-18T19:40:25.583252+00:00",
+          "last_updated": "2026-09-18T19:40:25.583252+00:00",
+          "context": {
+            "id": "01M2V0HKKFPHYGV3688FD349XN",
+            "parent_id": null,
+            "user_id": "755fb43770ea404b8263c7f397a0b4ec"
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "14": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.breaker_phase_a_power\",\"state\":\"0.593\",\"attributes\":{\"state_class\":\"measurement\",\"unit_of_measurement\":\"kW\",\"device_class\":\"power\",\"friendly_name\":\"Breaker Phase A power\"},\"last_changed\":\"2026-09-18T19:41:00.536314+00:00\",\"last_reported\":\"2026-09-18T19:41:00.536314+00:00\",\"last_updated\":\"2026-09-18T19:41:00.536314+00:00\",\"context\":{\"id\":\"01M2V0JNQR3N1WBN5CJ864N2S9\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.breaker_phase_a_power",
+          "state": "0.593",
+          "attributes": {
+            "state_class": "measurement",
+            "unit_of_measurement": "kW",
+            "device_class": "power",
+            "friendly_name": "Breaker Phase A power"
+          },
+          "last_changed": "2026-09-18T19:41:00.536314+00:00",
+          "last_reported": "2026-09-18T19:41:00.536314+00:00",
+          "last_updated": "2026-09-18T19:41:00.536314+00:00",
+          "context": {
+            "id": "01M2V0JNQR3N1WBN5CJ864N2S9",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "15": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.breaker_phase_a_current\",\"state\":\"6.11\",\"attributes\":{\"state_class\":\"measurement\",\"unit_of_measurement\":\"A\",\"device_class\":\"current\",\"friendly_name\":\"Breaker Phase A current\"},\"last_changed\":\"2026-09-18T19:41:00.536265+00:00\",\"last_reported\":\"2026-09-18T19:41:00.536265+00:00\",\"last_updated\":\"2026-09-18T19:41:00.536265+00:00\",\"context\":{\"id\":\"01M2V0JNQRNYBQMYW5JFPYTVRW\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.breaker_phase_a_current",
+          "state": "6.11",
+          "attributes": {
+            "state_class": "measurement",
+            "unit_of_measurement": "A",
+            "device_class": "current",
+            "friendly_name": "Breaker Phase A current"
+          },
+          "last_changed": "2026-09-18T19:41:00.536265+00:00",
+          "last_reported": "2026-09-18T19:41:00.536265+00:00",
+          "last_updated": "2026-09-18T19:41:00.536265+00:00",
+          "context": {
+            "id": "01M2V0JNQRNYBQMYW5JFPYTVRW",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "16": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"binary_sensor.unifi_dream_machine_wan_status\",\"state\":\"on\",\"attributes\":{\"device_class\":\"connectivity\",\"friendly_name\":\"UniFi Dream Machine WAN status\"},\"last_changed\":\"2026-09-18T00:04:19.011142+00:00\",\"last_reported\":\"2026-09-18T02:38:18.286003+00:00\",\"last_updated\":\"2026-09-18T00:04:19.011142+00:00\",\"context\":{\"id\":\"01M2RX82Y3KJJENXB73WR6ZSNH\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "binary_sensor.unifi_dream_machine_wan_status",
+          "state": "on",
+          "attributes": {
+            "device_class": "connectivity",
+            "friendly_name": "UniFi Dream Machine WAN status"
+          },
+          "last_changed": "2026-09-18T00:04:19.011142+00:00",
+          "last_reported": "2026-09-18T02:38:18.286003+00:00",
+          "last_updated": "2026-09-18T00:04:19.011142+00:00",
+          "context": {
+            "id": "01M2RX82Y3KJJENXB73WR6ZSNH",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "17": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.cloud_gateway_ultra_ralphi_state\",\"state\":\"connected\",\"attributes\":{\"options\":[\"disconnected\",\"connected\",\"pending\",\"firmware_mismatch\",\"upgrading\",\"provisioning\",\"heartbeat_missed\",\"adopting\",\"deleting\",\"inform_error\",\"adoption_failed\",\"isolated\"],\"device_class\":\"enum\",\"friendly_name\":\"Cloud Gateway Ultra Ralphi State\"},\"last_changed\":\"2026-09-18T00:04:20.820975+00:00\",\"last_reported\":\"2026-09-18T02:38:16.972932+00:00\",\"last_updated\":\"2026-09-18T00:04:20.820975+00:00\",\"context\":{\"id\":\"01M2RX84PM3GF41YQ34TXY9NK0\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.cloud_gateway_ultra_ralphi_state",
+          "state": "connected",
+          "attributes": {
+            "options": [
+              "disconnected",
+              "connected",
+              "pending",
+              "firmware_mismatch",
+              "upgrading",
+              "provisioning",
+              "heartbeat_missed",
+              "adopting",
+              "deleting",
+              "inform_error",
+              "adoption_failed",
+              "isolated"
+            ],
+            "device_class": "enum",
+            "friendly_name": "Cloud Gateway Ultra Ralphi State"
+          },
+          "last_changed": "2026-09-18T00:04:20.820975+00:00",
+          "last_reported": "2026-09-18T02:38:16.972932+00:00",
+          "last_updated": "2026-09-18T00:04:20.820975+00:00",
+          "context": {
+            "id": "01M2RX84PM3GF41YQ34TXY9NK0",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "18": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":false,\"error\":\"ha_http_error\",\"http_status\":404,\"body\":\"{\\\"message\\\":\\\"Entity not found.\\\"}\"}"
+        }
+      ],
+      "structuredContent": {
+        "ok": false,
+        "error": "ha_http_error",
+        "http_status": 404,
+        "body": "{\"message\":\"Entity not found.\"}"
+      },
+      "isError": false
+    }
+  },
+  "19": {
+    "jsonrpc": "2.0",
+    "id": 19,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":false,\"error\":\"ha_http_error\",\"http_status\":404,\"body\":\"{\\\"message\\\":\\\"Entity not found.\\\"}\"}"
+        }
+      ],
+      "structuredContent": {
+        "ok": false,
+        "error": "ha_http_error",
+        "http_status": 404,
+        "body": "{\"message\":\"Entity not found.\"}"
+      },
+      "isError": false
+    }
+  }
+}

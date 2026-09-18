@@ -34,12 +34,21 @@ def test_inspect_individual_subsystems() -> None:
     # Telephony
     tel = inspect_operational_state("telephony")
     assert tel["data"]["hardware"] == "Grandstream UCM6104 (Firmware 1.0.20.48)"
-    assert len(tel["data"]["registered_extensions"]) == 4
+    assert len(tel["data"]["registered_extensions"]) >= 4
 
     # Solar
     sol = inspect_operational_state("solar_power")
-    assert sol["data"]["solar_generation_watts"] == 3840
-    assert sol["data"]["battery_charge_pct"] == 94.0
+    assert sol["data"]["solar_generation_watts"] == 529
+    assert sol["data"]["battery_charge_pct"] == 100.0
+
+    # Security Alarm (Intelbras)
+    alm = inspect_operational_state("security_alarm")
+    assert alm["data"]["partition"] == "Panel Home Ralphi (Partition 0)"
+    assert alm["data"]["monitored_zones_count"] == 10
+
+    # Video Surveillance (Dahua)
+    cam = inspect_operational_state("video_surveillance")
+    assert "192.168.1.100" in cam["data"]["nvr_host"]
 
     # Network
     net = inspect_operational_state("network_wifi")

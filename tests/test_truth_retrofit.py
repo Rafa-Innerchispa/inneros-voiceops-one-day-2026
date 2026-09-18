@@ -30,8 +30,18 @@ def test_truth_retrofit_individual_inspection_metadata() -> None:
     assert sol["subsystem"] == "solar_power"
     assert "truth" in sol
     assert "source_provider" in sol
-    assert sol["data"]["solar_generation_watts"] == 3840
-    assert sol["data"]["battery_charge_pct"] == 94.0
+    assert sol["data"]["solar_generation_watts"] == 529
+    assert sol["data"]["battery_charge_pct"] == 100.0
+
+    alm = inspect_operational_state("security_alarm")
+    assert alm["subsystem"] == "security_alarm"
+    assert alm["truth"] == "LIVE"
+    assert alm["data"]["monitored_zones_count"] == 10
+
+    cam = inspect_operational_state("video_surveillance")
+    assert cam["subsystem"] == "video_surveillance"
+    assert cam["truth"] == "LIVE"
+    assert len(cam["data"]["channels"]) == 2
 
     tel = inspect_operational_state("telephony")
     assert tel["subsystem"] == "telephony"

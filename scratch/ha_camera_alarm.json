@@ -1,0 +1,320 @@
+{
+  "1": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {
+        "experimental": {},
+        "logging": {},
+        "prompts": {
+          "listChanged": true
+        },
+        "resources": {
+          "subscribe": false,
+          "listChanged": true
+        },
+        "tools": {
+          "listChanged": true
+        },
+        "extensions": {
+          "io.modelcontextprotocol/ui": {}
+        }
+      },
+      "serverInfo": {
+        "name": "Ralphi-IA-MCP",
+        "version": "3.5.0"
+      },
+      "instructions": "Puente MCP entre ChatGPT y MongoDB pcdoctor_swarm + memoria ai_coordination. Al iniciar sesión SIEMPRE (sin que Rafael pegue nada): get_coordination_live() → read_coordination_file('HUB/ESTADO_VIVO.md') → read_coordination_file('HUB/RUNBOOK_COTIZACION_WHATSAPP.md') → bootstrap_context(). Cotizar: list_mcp_tool_profiles() perfil quoter; seguir RUNBOOK HUB. Si revision subió, releer mandatory_reads. Órdenes: fila en Notion DB RalfIA Coordination O create_ops_task. La ruta canónica de ChatGPT es chatgpt/INBOX.md con espejo ChatGPT/INBOX.md. Si file y Mongo divergen, la verdad de entrega vive en Mongo ralfia_agent_messages y luego se resynca Markdown. Usa search/fetch para Mongo, read_coordination_file/search_coordination_docs para docs del servidor. Agentes — lenguaje natural: resolve_agent(mensaje) → route_agent_request(mensaje, auto_execute=true). Catálogo: get_agent_catalog(). Orquestador principal AG-25: ralfia_dispatch(mensaje, auto_execute=true). dispatch_local_agent ejecuta por defecto (dry_run=true solo preview). Al cerrar: log_coordination_event(agent=CHATGPT) + save_chatgpt_note o chatgpt/OUTBOX vía nota. No hay OpenAI API en el servidor."
+    }
+  },
+  "30": {
+    "jsonrpc": "2.0",
+    "id": 30,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"count\":0,\"entities\":[],\"domain_filter\":\"camera\"}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "count": 0,
+        "entities": [],
+        "domain_filter": "camera"
+      },
+      "isError": false
+    }
+  },
+  "31": {
+    "jsonrpc": "2.0",
+    "id": 31,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"count\":40,\"entities\":[{\"entity_id\":\"binary_sensor.unifi_dream_machine_wan_status\",\"state\":\"on\",\"friendly_name\":\"UniFi Dream Machine WAN status\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_1\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 1\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_2\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 2\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_3\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 3\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_4\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 4\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_5\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 5\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_6\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 6\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_7\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 7\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_8\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 8\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_9\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 9\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_10\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 10\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_11\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 11\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_12\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 12\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_13\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 13\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_14\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 14\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_15\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 15\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_16\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 16\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_17\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 17\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_18\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 18\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_19\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 19\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_20\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 20\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_21\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 21\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_22\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 22\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_23\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 23\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_24\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 24\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_25\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 25\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_26\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 26\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_27\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 27\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_28\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 28\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_29\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 29\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_30\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 30\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_31\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 31\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_32\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 32\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_33\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 33\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_34\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 34\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_35\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 35\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_36\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 36\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_37\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 37\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_38\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 38\"},{\"entity_id\":\"binary_sensor.la_victoria_zona_39\",\"state\":\"off\",\"friendly_name\":\"La Victoria  Zona 39\"}],\"domain_filter\":\"binary_sensor\"}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "count": 40,
+        "entities": [
+          {
+            "entity_id": "binary_sensor.unifi_dream_machine_wan_status",
+            "state": "on",
+            "friendly_name": "UniFi Dream Machine WAN status"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_1",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 1"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_2",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 2"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_3",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 3"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_4",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 4"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_5",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 5"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_6",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 6"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_7",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 7"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_8",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 8"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_9",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 9"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_10",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 10"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_11",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 11"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_12",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 12"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_13",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 13"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_14",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 14"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_15",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 15"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_16",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 16"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_17",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 17"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_18",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 18"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_19",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 19"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_20",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 20"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_21",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 21"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_22",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 22"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_23",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 23"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_24",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 24"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_25",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 25"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_26",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 26"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_27",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 27"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_28",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 28"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_29",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 29"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_30",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 30"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_31",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 31"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_32",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 32"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_33",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 33"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_34",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 34"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_35",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 35"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_36",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 36"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_37",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 37"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_38",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 38"
+          },
+          {
+            "entity_id": "binary_sensor.la_victoria_zona_39",
+            "state": "off",
+            "friendly_name": "La Victoria  Zona 39"
+          }
+        ],
+        "domain_filter": "binary_sensor"
+      },
+      "isError": false
+    }
+  },
+  "32": {
+    "jsonrpc": "2.0",
+    "id": 32,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"count\":6,\"entities\":[{\"entity_id\":\"alarm_control_panel.la_victoria_particion_a\",\"state\":\"disarmed\",\"friendly_name\":\"La Victoria  Partición A\"},{\"entity_id\":\"alarm_control_panel.la_victoria_particion_b\",\"state\":\"disarmed\",\"friendly_name\":\"La Victoria  Partición B\"},{\"entity_id\":\"alarm_control_panel.la_victoria_particion_c\",\"state\":\"disarmed\",\"friendly_name\":\"La Victoria  Partición C\"},{\"entity_id\":\"alarm_control_panel.la_victoria_particion_d\",\"state\":\"disarmed\",\"friendly_name\":\"La Victoria  Partición D\"},{\"entity_id\":\"alarm_control_panel.casa_mama_casa_mama\",\"state\":\"disarmed\",\"friendly_name\":\"Casa Mama Casa Mama\"},{\"entity_id\":\"alarm_control_panel.panel_home_ralphi_panel_home_ralphi\",\"state\":\"disarmed\",\"friendly_name\":\"Panel Home Ralphi Panel Home Ralphi\"}],\"domain_filter\":\"alarm_control_panel\"}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "count": 6,
+        "entities": [
+          {
+            "entity_id": "alarm_control_panel.la_victoria_particion_a",
+            "state": "disarmed",
+            "friendly_name": "La Victoria  Partición A"
+          },
+          {
+            "entity_id": "alarm_control_panel.la_victoria_particion_b",
+            "state": "disarmed",
+            "friendly_name": "La Victoria  Partición B"
+          },
+          {
+            "entity_id": "alarm_control_panel.la_victoria_particion_c",
+            "state": "disarmed",
+            "friendly_name": "La Victoria  Partición C"
+          },
+          {
+            "entity_id": "alarm_control_panel.la_victoria_particion_d",
+            "state": "disarmed",
+            "friendly_name": "La Victoria  Partición D"
+          },
+          {
+            "entity_id": "alarm_control_panel.casa_mama_casa_mama",
+            "state": "disarmed",
+            "friendly_name": "Casa Mama Casa Mama"
+          },
+          {
+            "entity_id": "alarm_control_panel.panel_home_ralphi_panel_home_ralphi",
+            "state": "disarmed",
+            "friendly_name": "Panel Home Ralphi Panel Home Ralphi"
+          }
+        ],
+        "domain_filter": "alarm_control_panel"
+      },
+      "isError": false
+    }
+  }
+}

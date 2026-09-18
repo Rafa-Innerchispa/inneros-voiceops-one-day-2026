@@ -1,0 +1,177 @@
+{
+  "1": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"alarm_control_panel.panel_home_ralphi_panel_home_ralphi\",\"state\":\"disarmed\",\"attributes\":{\"code_format\":null,\"changed_by\":null,\"code_arm_required\":false,\"device_id\":602518,\"partition_id\":0,\"partition_name\":\"Panel Home Ralphi\",\"is_in_alarm\":false,\"raw_status\":\"disarmed\",\"arm_mode\":\"disarmed\",\"is_triggered\":false,\"has_saved_password\":true,\"partitions_enabled\":true,\"connection_unavailable\":false,\"connection_unavailable_raw\":false,\"last_updated\":\"2026-09-18T19:40:36.529860\",\"pre_trigger_arm_mode\":null,\"last_trigger_zone\":null,\"last_trigger_zones\":[],\"last_trigger_time\":null,\"last_trigger_is_current\":false,\"friendly_name\":\"Panel Home Ralphi Panel Home Ralphi\",\"supported_features\":2},\"last_changed\":\"2026-09-18T00:04:21.061994+00:00\",\"last_reported\":\"2026-09-18T19:40:36.531274+00:00\",\"last_updated\":\"2026-09-18T19:40:36.531274+00:00\",\"context\":{\"id\":\"01M2V0HY9KAZ2MRTGDEEA9ZQTN\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "alarm_control_panel.panel_home_ralphi_panel_home_ralphi",
+          "state": "disarmed",
+          "attributes": {
+            "code_format": null,
+            "changed_by": null,
+            "code_arm_required": false,
+            "device_id": 602518,
+            "partition_id": 0,
+            "partition_name": "Panel Home Ralphi",
+            "is_in_alarm": false,
+            "raw_status": "disarmed",
+            "arm_mode": "disarmed",
+            "is_triggered": false,
+            "has_saved_password": true,
+            "partitions_enabled": true,
+            "connection_unavailable": false,
+            "connection_unavailable_raw": false,
+            "last_updated": "2026-09-18T19:40:36.529860",
+            "pre_trigger_arm_mode": null,
+            "last_trigger_zone": null,
+            "last_trigger_zones": [],
+            "last_trigger_time": null,
+            "last_trigger_is_current": false,
+            "friendly_name": "Panel Home Ralphi Panel Home Ralphi",
+            "supported_features": 2
+          },
+          "last_changed": "2026-09-18T00:04:21.061994+00:00",
+          "last_reported": "2026-09-18T19:40:36.531274+00:00",
+          "last_updated": "2026-09-18T19:40:36.531274+00:00",
+          "context": {
+            "id": "01M2V0HY9KAZ2MRTGDEEA9ZQTN",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "2": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"device_tracker.nvr_dahua\",\"state\":\"home\",\"attributes\":{\"source_type\":\"router\",\"ip\":\"192.168.1.100\",\"mac\":\"08:ed:ed:7a:15:f1\",\"host_name\":\"\",\"is_guest\":false,\"qos_policy_applied\":true,\"name\":\"NVR Dahua\",\"oui\":\"Zhejiang Dahua Technology Co., Ltd.\",\"friendly_name\":\"NVR Dahua NVR Dahua\"},\"last_changed\":\"2026-09-18T00:04:20.792791+00:00\",\"last_reported\":\"2026-09-18T02:38:16.836516+00:00\",\"last_updated\":\"2026-09-18T00:04:20.792791+00:00\",\"context\":{\"id\":\"01M2RX84NR6ZSPGX2H0VB4EEDS\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "device_tracker.nvr_dahua",
+          "state": "home",
+          "attributes": {
+            "source_type": "router",
+            "ip": "192.168.1.100",
+            "mac": "08:ed:ed:7a:15:f1",
+            "host_name": "",
+            "is_guest": false,
+            "qos_policy_applied": true,
+            "name": "NVR Dahua",
+            "oui": "Zhejiang Dahua Technology Co., Ltd.",
+            "friendly_name": "NVR Dahua NVR Dahua"
+          },
+          "last_changed": "2026-09-18T00:04:20.792791+00:00",
+          "last_reported": "2026-09-18T02:38:16.836516+00:00",
+          "last_updated": "2026-09-18T00:04:20.792791+00:00",
+          "context": {
+            "id": "01M2RX84NR6ZSPGX2H0VB4EEDS",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "3": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.breaker_phase_a_voltage\",\"state\":\"120.6\",\"attributes\":{\"state_class\":\"measurement\",\"unit_of_measurement\":\"V\",\"device_class\":\"voltage\",\"friendly_name\":\"Breaker Phase A voltage\"},\"last_changed\":\"2026-09-18T19:40:30.330479+00:00\",\"last_reported\":\"2026-09-18T19:40:30.330479+00:00\",\"last_updated\":\"2026-09-18T19:40:30.330479+00:00\",\"context\":{\"id\":\"01M2V0HR7T4Y0BFDCCCBN87SQJ\",\"parent_id\":null,\"user_id\":null}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.breaker_phase_a_voltage",
+          "state": "120.6",
+          "attributes": {
+            "state_class": "measurement",
+            "unit_of_measurement": "V",
+            "device_class": "voltage",
+            "friendly_name": "Breaker Phase A voltage"
+          },
+          "last_changed": "2026-09-18T19:40:30.330479+00:00",
+          "last_reported": "2026-09-18T19:40:30.330479+00:00",
+          "last_updated": "2026-09-18T19:40:30.330479+00:00",
+          "context": {
+            "id": "01M2V0HR7T4Y0BFDCCCBN87SQJ",
+            "parent_id": null,
+            "user_id": null
+          }
+        }
+      },
+      "isError": false
+    }
+  },
+  "4": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"entity\":{\"entity_id\":\"sensor.inneros_pi01_solar_battery_capacity\",\"state\":\"100\",\"attributes\":{\"friendly_name\":\"InnerOS Pi01 Solar Status\",\"device_model\":\"Xmart XSI-BB-120-3K-24-MPP\",\"protocol\":\"PI30\",\"usb_vid_pid\":\"0665:5161\",\"source_node\":\"InnerOs-Pi01\",\"updated_at\":\"2026-09-18T19:40:25.347802+00:00\",\"safety\":\"read_only_queries_only\",\"raw_field_count\":21,\"mode_inferred\":{\"mode\":\"utility_present_solar_charging\",\"grid_present\":true,\"output_present\":true,\"battery_mode\":false,\"pv_charging\":true,\"battery_discharging\":false},\"source_field\":\"battery_capacity_percent\",\"unit_of_measurement\":\"%\",\"state_class\":\"measurement\",\"device_class\":\"battery\"},\"last_changed\":\"2026-09-18T00:04:59.474050+00:00\",\"last_reported\":\"2026-09-18T19:40:25.456428+00:00\",\"last_updated\":\"2026-09-18T19:40:25.456428+00:00\",\"context\":{\"id\":\"01M2V0HKFGMHAHCK62DE8GN385\",\"parent_id\":null,\"user_id\":\"755fb43770ea404b8263c7f397a0b4ec\"}}}"
+        }
+      ],
+      "structuredContent": {
+        "ok": true,
+        "entity": {
+          "entity_id": "sensor.inneros_pi01_solar_battery_capacity",
+          "state": "100",
+          "attributes": {
+            "friendly_name": "InnerOS Pi01 Solar Status",
+            "device_model": "Xmart XSI-BB-120-3K-24-MPP",
+            "protocol": "PI30",
+            "usb_vid_pid": "0665:5161",
+            "source_node": "InnerOs-Pi01",
+            "updated_at": "2026-09-18T19:40:25.347802+00:00",
+            "safety": "read_only_queries_only",
+            "raw_field_count": 21,
+            "mode_inferred": {
+              "mode": "utility_present_solar_charging",
+              "grid_present": true,
+              "output_present": true,
+              "battery_mode": false,
+              "pv_charging": true,
+              "battery_discharging": false
+            },
+            "source_field": "battery_capacity_percent",
+            "unit_of_measurement": "%",
+            "state_class": "measurement",
+            "device_class": "battery"
+          },
+          "last_changed": "2026-09-18T00:04:59.474050+00:00",
+          "last_reported": "2026-09-18T19:40:25.456428+00:00",
+          "last_updated": "2026-09-18T19:40:25.456428+00:00",
+          "context": {
+            "id": "01M2V0HKFGMHAHCK62DE8GN385",
+            "parent_id": null,
+            "user_id": "755fb43770ea404b8263c7f397a0b4ec"
+          }
+        }
+      },
+      "isError": false
+    }
+  }
+}
