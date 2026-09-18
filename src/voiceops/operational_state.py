@@ -301,6 +301,7 @@ class OperationalStateRegistry:
         proposal_id = f"prop_{secrets.token_hex(4)}"
 
         summary_map: dict[str, str] = {
+            "create_incident_ticket": "Create a local incident ticket with the current observed evidence; do not modify physical equipment",
             "restart_wifi_ap": "Power-cycle PoE port for AP-SolarYard to clear channel interference and packet loss",
             "switch_solar_bypass": "Engage utility bypass on Growatt 5kW inverter for maintenance stabilization",
             "isolate_solar_phase": "Isolate Substation Phase 2 to prevent thermal delta overcurrent",

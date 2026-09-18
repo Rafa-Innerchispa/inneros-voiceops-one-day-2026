@@ -20,13 +20,10 @@ def get_operational_registry() -> OperationalStateRegistry:
 
 
 def inspect_operational_state(subsystem: str = "all", live_fluctuation: bool = False) -> dict[str, Any]:
-    """READ-ONLY tool for inspecting operational telemetry across Guayaquil infrastructure.
+    from .live_status import telemetry_snapshot
+    return telemetry_snapshot(subsystem)
 
-    Args:
-        subsystem: The target subsystem ('solar_power', 'telephony', 'network_wifi', 'dmx_lighting', 'servers_rack', or 'all').
-        live_fluctuation: Whether to include simulated micro-variations over time.
-    """
-    return _GLOBAL_REGISTRY.get_subsystem_telemetry(subsystem, live_fluctuation=live_fluctuation)
+
 
 
 def propose_governed_action(
@@ -56,82 +53,11 @@ def propose_governed_action(
     }
 
 
-def submit_user_approval(
-    proposal_id: str,
-    utterance: str,
-    session_id: str = "boson-live-session",
-) -> dict[str, Any]:
-    """Submits the human operator's verbal utterance for strict fail-closed evaluation and execution.
+def submit_user_approval(proposal_id: str, utterance: str, session_id: str = "boson-live-session") -> dict[str, Any]:
+    from .ticket_ops import execute_approved_ticket
+    return execute_approved_ticket(proposal_id, utterance, session_id, _GLOBAL_REGISTRY, _APPROVAL_GATE, _PERMIT_MANAGER)
 
-    Args:
-        proposal_id: The ID returned by propose_governed_action.
-        utterance: The exact verbatim speech from the human operator (e.g. 'Yes proceed', 'Autorizo aislar fase 2', 'No cancela').
-        session_id: The active session identifier.
-    """
-    proposal = _GLOBAL_REGISTRY.get_proposal(proposal_id)
-    if not proposal:
-        return {
-            "status": "BLOCKED",
-            "decision": "PROPOSAL_NOT_FOUND",
-            "reason": f"No active proposal found for ID '{proposal_id}' (may be expired or already executed).",
-            "fail_closed": True,
-        }
 
-    # Evaluate approval through the deterministic gate (English, Spanish, Spanglish)
-    decision = _APPROVAL_GATE.decide(utterance)
-
-    if not decision.approved:
-        return {
-            "status": "BLOCKED",
-            "decision": "REJECTED_OR_AMBIGUOUS",
-            "reason": decision.reason,
-            "proposal_id": proposal_id,
-            "raw_utterance": utterance,
-            "fail_closed": True,
-            "message": "Action was blocked. Approval gate requires clear, unambiguous confirmation.",
-        }
-
-    # Issue a state-bound single-use cryptographic execution permit
-    state_snapshot = _GLOBAL_REGISTRY.get_subsystem_telemetry(
-        proposal.payload.get("target_subsystem", "all")
-    )
-    permit = _PERMIT_MANAGER.issue(
-        session_id=session_id,
-        source_event_id=f"evt_{proposal_id}",
-        action_type=proposal.action_type,
-        approval_transcript=utterance,
-        proposal=asdict(proposal),
-        state_snapshot=state_snapshot,
-    )
-
-    # Execute action under permit verification
-    result = _GLOBAL_REGISTRY.execute_governed_action(
-        proposal_id=proposal_id,
-        permit=permit,
-        session_id=session_id,
-    )
-
-    evidence_payload = {
-        "action_id": result.action_id,
-        "permit_id": permit.permit_id,
-        "signature": permit.signature,
-        "details": result.details,
-    }
-    evidence_hash = hashlib.sha256(
-        json.dumps(evidence_payload, sort_keys=True).encode("utf-8")
-    ).hexdigest()
-
-    return {
-        "status": "EXECUTED",
-        "action_id": result.action_id,
-        "action_type": result.action_type,
-        "permit_id": permit.permit_id,
-        "evidence_sha256": evidence_hash,
-        "htr_seconds_returned": result.details["htr_metric"]["saved_seconds"],
-        "classification": result.details["htr_metric"]["classification"],
-        "message": f"Action '{result.action_type}' successfully executed under permit {permit.permit_id}.",
-        "details": result.details,
-    }
 
 
 def inneros_analyze_incident(query: str, subsystem: str = "all") -> dict[str, Any]:
@@ -159,7 +85,7 @@ def inneros_analyze_incident(query: str, subsystem: str = "all") -> dict[str, An
                 "role": "system",
                 "content": (
                     "Eres el motor de análisis de incidentes InnerOS. Responde SOLO JSON con keys: "
-                    "root_cause, recommendation. Usa la telemetría provista; si truth=UNVERIFIED di que faltan datos en vivo."
+                    "root_cause, recommendation. Distingue hipotesis de hechos. No deduzcas causas historicas de estado actual. No inventes voltajes, tiempos o registros. Si faltan evidencias historicas di que no se puede confirmar la causa."
                 ),
             },
             {"role": "user", "content": _json.dumps(prompt_context, ensure_ascii=False)},
@@ -221,7 +147,7 @@ HIGGS_TOOL_DEFINITIONS = [
             "properties": {
                 "subsystem": {
                     "type": "string",
-                    "enum": ["all", "solar_power", "telephony", "network_wifi", "dmx_lighting", "servers_rack", "security_alarm"],
+                    "enum": ["all", "solar_power", "telephony", "network_wifi", "dmx_lighting", "servers_rack", "security_alarm", "video_surveillance"],
                     "description": "The specific subsystem to inspect, or 'all' for an overview.",
                 }
             },
@@ -238,6 +164,7 @@ HIGGS_TOOL_DEFINITIONS = [
                 "action_type": {
                     "type": "string",
                     "enum": [
+                        "create_incident_ticket",
                         "restart_wifi_ap",
                         "switch_solar_bypass",
                         "isolate_solar_phase",
@@ -249,7 +176,7 @@ HIGGS_TOOL_DEFINITIONS = [
                 },
                 "target_subsystem": {
                     "type": "string",
-                    "enum": ["solar_power", "telephony", "network_wifi", "dmx_lighting", "servers_rack"],
+                    "enum": ["solar_power", "telephony", "network_wifi", "dmx_lighting", "servers_rack", "all"],
                     "description": "Target subsystem for the action.",
                 },
                 "parameters": {
@@ -316,6 +243,7 @@ def execute_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return submit_user_approval(
             proposal_id=arguments.get("proposal_id", ""),
             utterance=arguments.get("utterance", ""),
+            session_id=arguments.get("session_id", "boson-live-session"),
         )
     elif name == "inneros_analyze_incident":
         return inneros_analyze_incident(

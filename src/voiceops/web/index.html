@@ -121,12 +121,12 @@
           <div class="scenario-bar">
             <span class="scenario-label">Judge Demo Scenarios:</span>
             <button class="pill-btn" onclick="triggerScenario('inspect')">1. Full Site Diagnostics</button>
-            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. Instant Barge-In (&lt;50ms)</button>
+            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. Interrupt current response</button>
             <button class="pill-btn" onclick="triggerScenario('code_switch')">3. Technical Code-Switching</button>
             <button class="pill-btn" onclick="triggerScenario('approve')">4. Governed Action Approval</button>
             <button class="pill-btn" onclick="triggerScenario('reject')">5. Fail-Closed Ambiguity Block</button>
             <button class="pill-btn" onclick="triggerScenario('incident_analysis')">6. Qwen Incident Analysis</button>
-            <button class="pill-btn" onclick="triggerScenario('zoiper_test')">7. Live Zoiper Connect/Drop</button>
+
           </div>
         </div>
       </section>
@@ -141,9 +141,9 @@
               <h3>Site Telemetry (Guayaquil)</h3>
               <span class="badge-live"><span class="pulse-dot green"></span> LIVE STREAM</span>
             </div>
-            
+
             <div class="telemetry-sync-ticker">
-              <span id="telemetrySyncTime">Streaming GYE Node-01 · 0ms</span>
+              <span id="telemetrySyncTime">Waiting for first provider read</span>
             </div>
 
             <div class="subsystems-list">
@@ -156,14 +156,14 @@
                     <strong>Solar Power & Battery Array</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="solTruth">LIVE</span>
-                    <span class="status-indicator optimal" id="solStatus">HEALTHY</span>
+                    <span class="truth-badge live" id="solTruth">UNVERIFIED</span>
+                    <span class="status-indicator optimal" id="solStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>PV Generation:</span><strong id="solGen">529 W</strong></div>
-                  <div class="data-row"><span>Battery Bank:</span><strong id="solBat">100% (52.4V)</strong></div>
-                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">120.6V / 60Hz Guayaquil Grid</strong></div>
+                  <div class="data-row"><span>Inverter AC Output:</span><strong id="solGen">Waiting for source</strong></div>
+                  <div class="data-row"><span>Battery Bank:</span><strong id="solBat">Waiting for source</strong></div>
+                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">Waiting for source</strong></div>
                   <div class="provider-sub" id="solProvider">Source: Home Assistant Core / Xmart Inverter (Node AG-41)</div>
                 </div>
               </div>
@@ -176,17 +176,17 @@
                     <strong>Grandstream PBX Telephony</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="telTruth">LIVE</span>
-                    <span class="status-indicator optimal" id="telStatus">ONLINE</span>
+                    <span class="truth-badge live" id="telTruth">UNVERIFIED</span>
+                    <span class="status-indicator optimal" id="telStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Hardware:</span><strong>UCM6104 (UDP 4321)</strong></div>
-                  <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100, 101, 102, 103)</strong></div>
-                  <div class="data-row"><span>SIP Quality:</span><strong id="telQuality">Jitter 2.1ms (MOS 4.38)</strong></div>
+                  <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">Waiting for source</strong></div>
+                  <div class="data-row"><span>Read scope:</span><strong id="telQuality">Waiting for source</strong></div>
                   <div style="display:flex; gap:6px; margin: 6px 0;">
-                    <button class="btn btn-xs btn-outline" style="padding:2px 6px; font-size:10px;" onclick="registerZoiperExt('104')">+ Connect Zoiper (104)</button>
-                    <button class="btn btn-xs btn-outline" style="padding:2px 6px; font-size:10px;" onclick="unregisterZoiperExt('104')">- Disconnect Zoiper (104)</button>
+
+
                   </div>
                   <div class="provider-sub" id="telProvider">Source: Grandstream UCM6104 (UDP 4321 / TCP 7777 AMI)</div>
                 </div>
@@ -200,14 +200,14 @@
                     <strong>Network & Access Points</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="netTruth">LIVE</span>
-                    <span class="status-indicator warning" id="netStatus">ALERT</span>
+                    <span class="truth-badge live" id="netTruth">UNVERIFIED</span>
+                    <span class="status-indicator warning" id="netStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>Fiber WAN:</span><strong id="netWan">1.0 Gbps (RTT 3.8ms)</strong></div>
-                  <div class="data-row"><span>AP-SolarYard:</span><strong class="text-danger" id="netLoss">18.0% Packet Loss</strong></div>
-                  <div class="data-row"><span>Gateway:</span><strong id="netSwitch">UniFi Gateway Ultra (Online)</strong></div>
+                  <div class="data-row"><span>Fiber WAN:</span><strong id="netWan">Waiting for source</strong></div>
+                  <div class="data-row"><span>Packet loss:</span><strong class="text-danger" id="netLoss">Waiting for source</strong></div>
+                  <div class="data-row"><span>Gateway:</span><strong id="netSwitch">Waiting for source</strong></div>
                   <div class="provider-sub" id="netProvider">Source: UniFi Dream Machine & Cloud Gateway Ultra</div>
                 </div>
               </div>
@@ -220,14 +220,14 @@
                     <strong>Intelbras Security Alarm</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="alarmTruth">LIVE</span>
-                    <span class="status-indicator optimal" id="alarmStatus">DISARMED</span>
+                    <span class="truth-badge live" id="alarmTruth">UNVERIFIED</span>
+                    <span class="status-indicator optimal" id="alarmStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Partition:</span><strong>Panel Home Ralphi (0)</strong></div>
-                  <div class="data-row"><span>Perimeter Zones:</span><strong id="alarmZones">10 Zones Monitored</strong></div>
-                  <div class="data-row"><span>Alarm Trigger:</span><strong id="alarmTrigger">NORMAL (No Breach)</strong></div>
+                  <div class="data-row"><span>Perimeter Zones:</span><strong id="alarmZones">Waiting for source</strong></div>
+                  <div class="data-row"><span>Alarm Trigger:</span><strong id="alarmTrigger">Waiting for source</strong></div>
                   <div class="provider-sub" id="alarmProvider">Source: Home Assistant / Intelbras Guardian API</div>
                 </div>
               </div>
@@ -240,13 +240,13 @@
                     <strong>Dahua Video Surveillance</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="camTruth">LIVE</span>
-                    <span class="status-indicator optimal" id="camStatus">ACTIVE</span>
+                    <span class="truth-badge live" id="camTruth">UNVERIFIED</span>
+                    <span class="status-indicator optimal" id="camStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>Channels:</span><strong id="camChannels">C1 Acceso Principal · C2 Patio Exterior</strong></div>
-                  <div class="data-row"><span>Motion Event:</span><strong class="text-success" id="camMotion">VideoMotion Stream Online</strong></div>
+                  <div class="data-row"><span>Channels:</span><strong id="camChannels">Waiting for source</strong></div>
+                  <div class="data-row"><span>Motion Event:</span><strong class="text-success" id="camMotion">Waiting for source</strong></div>
                   <div class="data-row"><span>NVR Host:</span><strong>192.168.1.100 (30 FPS)</strong></div>
                   <div class="provider-sub" id="camProvider">Source: Physical Guardian / Dahua Technology Core</div>
                 </div>
@@ -260,13 +260,13 @@
                     <strong>DMX-512 Lighting Control</strong>
                   </div>
                   <div class="head-badges">
-                    <span class="truth-badge live" id="dmxTruth">LIVE</span>
-                    <span class="status-indicator optimal" id="dmxStatus">STANDBY</span>
+                    <span class="truth-badge live" id="dmxTruth">UNVERIFIED</span>
+                    <span class="status-indicator optimal" id="dmxStatus">UNVERIFIED</span>
                   </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Protocol:</span><strong>Art-Net (Universe 1)</strong></div>
-                  <div class="data-row"><span>Active Scene:</span><strong id="dmxScene">Normal Ops (80%)</strong></div>
+                  <div class="data-row"><span>Active Scene:</span><strong id="dmxScene">Waiting for source</strong></div>
                   <div class="data-row"><span>Emergency Strobe:</span><strong>Channels 12-16 Ready</strong></div>
                   <div class="provider-sub" id="dmxProvider">Source: Art-Net Universe 1 Bridge</div>
                 </div>

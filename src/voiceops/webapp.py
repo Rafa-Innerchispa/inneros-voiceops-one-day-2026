@@ -277,6 +277,14 @@ def mint_voice_agent_token(
 
 
 class VoiceOpsHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, format, *args):
+        # Do not write private setup invitation URLs to access logs.
+        if self.path.startswith('/setup/'):
+            return
+        return super().log_message(format, *args)
+
     server_version = "VoiceOpsDemo/0.3"
 
     @property
@@ -291,21 +299,29 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self) -> None:  # noqa: N802
+        from .operator_setup import route_get
+        if route_get(self):
+            return
+        if self.path == '/healthz':
+            from .live_status import build_identity
+            self._send_json({'ok': True, 'service': 'inneros-voiceops-boson',
+                'guardian_voice_bridge_enabled': bool(self.server.bridge_token),
+                'guardian_voice_bridge_mode': 'token' if self.server.bridge_token else 'disabled',
+                **build_identity()})
+            return
         if self.path == "/healthz":
-            self._send_json(
-                {
-                    "ok": True,
-                    "service": "inneros-voiceops",
-                    "live_voice_enabled": bool(self.server.live_voice_enabled),  # type: ignore[attr-defined]
-                    "credential_configured": bool(os.getenv("ASSEMBLYAI_API_KEY")),
-                    "guardian_voice_bridge_enabled": bool(self.server.bridge_token) or self._loopback_bridge_allowed(),  # type: ignore[attr-defined]
-                    "guardian_voice_bridge_mode": "token" if self.server.bridge_token else ("loopback_only" if self._loopback_bridge_allowed() else "disabled"),  # type: ignore[attr-defined]
-                    "production_writes": False,
-                }
-            )
+            from .live_status import build_identity
+            self._send_json({"ok": True, "service": "inneros-voiceops-boson",
+                "guardian_voice_bridge_enabled": bool(self.server.bridge_token),
+                "guardian_voice_bridge_mode": "token" if self.server.bridge_token else "disabled",
+                **build_identity()})
             return
         if self.path == "/ws/higgs":
             self._handle_ws_higgs()
+            return
+        if self.path == '/api/voice/config':
+            from .adapters.boson_client import boson_configured
+            self._send_json({'configured': boson_configured(), 'mode': 'relay', 'ws_url': '/ws/higgs', 'sample_rate': 24000})
             return
         if self.path == "/api/boson/token":
             from .adapters.boson_client import boson_configured, mint_client_secret
@@ -345,7 +361,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/telemetry":
             from .governed_tools import inspect_operational_state
-            self._send_json(inspect_operational_state("all", live_fluctuation=True))
+            from .live_status import telemetry_snapshot
+            self._send_json(telemetry_snapshot())
             return
         if self.path == "/api/boson/status":
             from .adapters.boson_client import boson_configured
@@ -371,7 +388,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         if self.path == "/api/voice/status":
             from .provider_status import build_voice_status
 
-            self._send_json(build_voice_status())
+            from .live_status import status_snapshot
+            self._send_json(status_snapshot())
             return
         if self.path == "/api/state":
             state = self.store.snapshot()
@@ -410,7 +428,13 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self) -> None:  # noqa: N802
+        from .operator_setup import route_post
+        if route_post(self):
+            return
         try:
+            if self.path in ('/api/telephony/register-extension', '/api/telephony/unregister-extension'):
+                self._send_json({'status':'BLOCKED','reason':'Register the phone on the PBX; this dashboard is read-only.'}, status=HTTPStatus.CONFLICT)
+                return
             if self.path == "/api/telephony/register-extension":
                 from .governed_tools import get_operational_registry
                 payload = self._read_json()
@@ -478,14 +502,13 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 self._send_json(sim_res)
                 return
             if self.path == "/api/boson/converse":
-                from .adapters.higgs_realtime import HiggsRealtimeSession
+                from .local_dialogue import converse
                 payload = self._read_json()
-                utterance = str(payload.get("utterance") or "")
-                active_prop = payload.get("active_proposal_id")
-                session = HiggsRealtimeSession()
-                conv_res = session.converse(user_utterance=utterance, active_proposal_id=active_prop)
-                self._send_json(conv_res)
+                utterance = str(payload.get("utterance") or payload.get("text") or "")[:1000]
+                session_id = str(payload.get("session_id") or "browser-local")[:80]
+                self._send_json(converse(utterance, session_id, payload.get("active_proposal_id")))
                 return
+
             if self.path == "/api/reset":
                 self._send_json(self.store.reset())
                 return
@@ -532,7 +555,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
     def _loopback_bridge_allowed(self) -> bool:
         server_host = str(self.server.server_address[0] or "")
         client_host = str(self.client_address[0] or "")
-        return server_host in {"127.0.0.1", "::1", "localhost"} and client_host in {"127.0.0.1", "::1"}
+        return server_host in {"127.0.0.1", "::1", "localhost"} and client_host in {"127.0.0.1", "::1"} and not self.headers.get("CF-Connecting-IP") and not self.headers.get("X-Forwarded-For")
 
     def _bridge_authorized(self) -> bool:
         expected = str(self.server.bridge_token or "")  # type: ignore[attr-defined]
@@ -590,6 +613,10 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 self.wfile.write(encode_ws_frame(1, text.encode("utf-8")))
                 self.wfile.flush()
 
+        if not boson_configured():
+            browser_send_text(json.dumps({'type':'voiceops.transport_error','error':'BOSON_NOT_CONFIGURED','fallback':True}))
+            self.close_connection = True
+            return
         if boson_configured():
             import queue
 
@@ -607,10 +634,12 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 except queue.Empty:
                     return b""
 
-            relay_thread = threading.Thread(
-                target=lambda: relay_boson_websocket(browser_send_raw, browser_recv),
-                daemon=True,
-            )
+            def run_relay():
+                try:
+                    relay_boson_websocket(browser_send_raw, browser_recv)
+                except Exception as exc:
+                    browser_send_text(json.dumps({'type':'voiceops.transport_error','error':type(exc).__name__,'fallback':True}))
+            relay_thread = threading.Thread(target=run_relay, daemon=True)
             relay_thread.start()
 
             try:
@@ -774,6 +803,8 @@ class VoiceOpsDemoServer(ThreadingHTTPServer):
 
 
 def main() -> None:
+    from .operator_setup import restore_provider_settings
+    restore_provider_settings()
     parser = argparse.ArgumentParser(description="InnerOS VoiceOps judge demo web UI")
     parser.add_argument("--host", default=os.getenv("VOICEOPS_HOST", "127.0.0.1"))
     parser.add_argument(

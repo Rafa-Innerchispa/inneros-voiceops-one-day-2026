@@ -21,7 +21,7 @@ const fallbackVoiceAgentConfig = {
 
 // InnerOS VoiceOps — Real Boson AI Higgs Realtime Speech-to-Speech Engine
 let activeProposalId = null;
-let currentHtrTotal = 18.4;
+let currentHtrTotal = 0;
 let isVoiceActive = false;
 let isAudioSpeaking = false;
 let animationFrameId = null;
@@ -1129,3 +1129,368 @@ function initWaveform() {
   }
   draw();
 }
+
+// Recovery transport: one audio engine, one upstream session, no double STT/TTS.
+(() => {
+  let ready = false, nextPlayAt = 0, responseId = null, audioReceived = false;
+  let interrupted = false, agentBubble = null, fallbackSpeech = null, opening = null;
+  const dialogueId = globalThis.crypto?.randomUUID?.() || ("local-" + Date.now().toString(36) + Math.random().toString(36).slice(2));
+  let greetingPending = false, lastFallbackText = '', polling = false;
+  const el = id => document.getElementById(id);
+  const textAt = (id, text) => { if (el(id)) el(id).textContent = text; };
+  const send = value => { if (higgsWebSocket?.readyState === WebSocket.OPEN) higgsWebSocket.send(JSON.stringify(value)); };
+
+  async function unlockAudio() {
+    if (!audioContext || audioContext.state === 'closed') audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state !== 'running') await audioContext.resume();
+    return audioContext;
+  }
+  function reportAudio(message) {
+    textAt('agentStateSubtitle', message);
+    console.warn('VoiceOps audio:', message);
+  }
+  function restartRecognition() {
+    if (!isVoiceActive || !useBrowserTtsFallback || isAudioSpeaking) return;
+    recognition ||= initSpeechRecognition();
+    try { recognition?.start(); } catch (_) {}
+  }
+  function activateFallback(message) {
+    ready = false; opening = null; useBrowserTtsFallback = true;
+    bosonConnectionMode = 'browser_fallback';
+    setAudioSource(AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
+    textAt('turnStatus', 'Browser voice fallback');
+    reportAudio(message || 'Higgs connection unavailable. Browser voice fallback enabled.');
+    restartRecognition();
+  }
+  function showAgentDelta(text) {
+    if (!agentBubble) {
+      appendChat('agent', '');
+      agentBubble = el('transcriptBox')?.lastElementChild?.querySelector('p');
+    }
+    if (agentBubble) agentBubble.textContent = pendingTranscript;
+    const box = el('transcriptBox'); if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  speakText = function(text, force = false) {
+    if (!text || (!force && !useBrowserTtsFallback)) return;
+    const synth = window.speechSynthesis;
+    if (!synth) { reportAudio('Browser speech output unavailable. Use Higgs audio.'); return; }
+    if (text === lastFallbackText && synth.speaking) return;
+    lastFallbackText = text;
+    synth.cancel(); synth.resume();
+    fallbackSpeech = new SpeechSynthesisUtterance(text);
+    fallbackSpeech.lang = /[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf]|\b(hola|alarma|revisa|casa|datos|estoy|autorizo)\b/i.test(text) ? 'es-EC' : 'en-US';
+    const voices = synth.getVoices();
+    const chosen = selectedVoice && selectedVoice.lang.slice(0,2) === fallbackSpeech.lang.slice(0,2) ? selectedVoice : voices.find(v => v.lang.startsWith(fallbackSpeech.lang.slice(0,2)));
+    if (chosen) fallbackSpeech.voice = chosen;
+    fallbackSpeech.volume = 1; fallbackSpeech.rate = 1;
+    fallbackSpeech.onstart = () => {
+      isAudioSpeaking = true; setAudioSource(AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
+      el('audioPlayingTag')?.classList.remove('hidden');
+      if (useBrowserTtsFallback) try { recognition?.stop(); } catch (_) {}
+    };
+    fallbackSpeech.onend = () => { isAudioSpeaking = false; fallbackSpeech = null; el('audioPlayingTag')?.classList.add('hidden'); restartRecognition(); };
+    fallbackSpeech.onerror = event => {
+      isAudioSpeaking = false; fallbackSpeech = null;
+      if (!['interrupted', 'canceled'].includes(event.error)) reportAudio('Speech output: ' + event.error + '. Press Test audio to enable playback.');
+      restartRecognition();
+    };
+    synth.speak(fallbackSpeech);
+  };
+
+  cancelAllAudioPlayback = function() {
+    window.speechSynthesis?.cancel(); fallbackSpeech = null;
+    for (const source of activeAudioSources) try { source.stop(); } catch (_) {}
+    activeAudioSources = []; nextPlayAt = audioContext?.currentTime || 0;
+    isAudioSpeaking = false;
+    el('audioPlayingTag')?.classList.add('hidden');
+  };
+  triggerInstantBargeIn = function() {
+    interrupted = true; cancelAllAudioPlayback(); pendingTranscript = '';
+    if (ready && responseId) send({type:'response.cancel'});
+    textAt('turnStatus', 'Listening');
+    restartRecognition();
+  };
+
+  playPCM16AudioChunk = function(data, rate = 24000) {
+    if (interrupted || !data) return;
+    try {
+      if (!audioContext || audioContext.state !== 'running') {
+        reportAudio('Audio device suspended. Press Test audio or Start voice.');
+        useBrowserTtsFallback = true; return;
+      }
+      const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+      if (bytes.length % 2 || !bytes.length) throw new Error('Invalid PCM16 frame');
+      const view = new DataView(bytes.buffer);
+      const buffer = audioContext.createBuffer(1, bytes.length/2, rate);
+      const samples = buffer.getChannelData(0);
+      for (let i=0; i<samples.length; i++) samples[i] = view.getInt16(i*2,true)/32768;
+      const node = audioContext.createBufferSource(); node.buffer = buffer; node.connect(audioContext.destination);
+      const begin = Math.max(audioContext.currentTime + 0.025, nextPlayAt);
+      nextPlayAt = begin + buffer.duration;
+      activeAudioSources.push(node);
+      node.onended = () => {
+        activeAudioSources = activeAudioSources.filter(s => s !== node);
+        if (!activeAudioSources.length) { isAudioSpeaking = false; el('audioPlayingTag')?.classList.add('hidden'); }
+      };
+      node.start(begin);
+      audioReceived = true; isAudioSpeaking = true; useBrowserTtsFallback = false;
+      setAudioSource(AUDIO_SOURCE.HIGGS); el('audioPlayingTag')?.classList.remove('hidden');
+    } catch (error) { useBrowserTtsFallback = true; reportAudio(error.message); }
+  };
+
+  handleHiggsServerEvent = function(event) {
+    const kind = event.type || '';
+    if (kind === 'session.created') {
+      const fallback = event.session?.upstream === 'NOT_CONNECTED' || event.session?.model === 'browser-fallback';
+      if (fallback) { activateFallback(); return; }
+      textAt('turnStatus','Higgs connected');
+    } else if (kind === 'session.updated') {
+      ready = true; useBrowserTtsFallback = false; bosonConnectionMode = 'relay';
+      try { recognition?.abort(); } catch (_) {}
+      textAt('turnStatus','Higgs ready');
+      textAt('agentStateSubtitle','Native Higgs audio + live local tools');
+      if (greetingPending) {
+        greetingPending = false;
+        send({type:'conversation.item.create', item:{type:'message',role:'user',content:[{type:'input_text',text:'Hola, soy Rafael. Saluda brevemente y pregunta en que me puedes ayudar.'}]}});
+        send({type:'response.create'});
+      }
+    } else if (kind === 'response.created') {
+      responseId = event.response?.id || event.response_id || 'active';
+      interrupted = false; audioReceived = false; pendingTranscript = ''; agentBubble = null;
+    } else if (['response.output_audio_transcript.delta','response.audio_transcript.delta','response.output_text.delta','response.text.delta'].includes(kind)) {
+      if (!interrupted) { pendingTranscript += event.delta || ''; showAgentDelta(event.delta || ''); }
+    } else if (['response.output_audio_transcript.done','response.audio_transcript.done','response.output_text.done'].includes(kind)) {
+      if (!interrupted && !pendingTranscript) { pendingTranscript = event.transcript || event.text || ''; showAgentDelta(pendingTranscript); }
+    } else if (['response.output_audio.delta','response.audio.delta'].includes(kind)) {
+      playPCM16AudioChunk(event.delta, event.sample_rate || higgsAudioSampleRate);
+    } else if (kind === 'response.done') {
+      const status = event.response?.status;
+      if (!interrupted && status !== 'cancelled' && !audioReceived && pendingTranscript) speakText(pendingTranscript, true);
+      if (status === 'failed') reportAudio('Higgs response failed: ' + (event.response?.status_details?.error?.message || 'provider error'));
+      responseId = null; pendingTranscript = ''; agentBubble = null;
+    } else if (kind === 'input_audio_buffer.speech_started') {
+      interrupted = true; cancelAllAudioPlayback(); textAt('turnStatus','Listening to you');
+    } else if (['conversation.item.input_audio_transcription.completed','conversation.item.input_audio_transcription.done'].includes(kind)) {
+      const text = event.transcript || event.text; if (text) appendChat('user',text);
+    } else if (kind === 'voiceops.tool') {
+      recordToolCall(event.name, event.arguments || {}, event.output || {}, event.duration_ms || 0);
+      if (event.name === 'propose_governed_action' && event.output?.proposal_id) {
+        activeProposalId = event.output.proposal_id;
+        showProposalCard(activeProposalId,event.output.summary,event.output.target_subsystem);
+      }
+      if (event.name === 'submit_user_approval') handleApprovalExecution(event.output || {});
+      if (event.name === 'inspect_operational_state') fetchTelemetry();
+    } else if (kind === 'voiceops.transport_error') {
+      activateFallback(event.error); try { higgsWebSocket?.close(); } catch (_) {}
+    } else if (kind === 'error') {
+      const message = event.error?.message || event.message || 'Higgs protocol error';
+      reportAudio(message);
+    }
+  };
+
+  initBosonSession = async function() {
+    if (ready && higgsWebSocket?.readyState === WebSocket.OPEN) return;
+    if (opening) return opening;
+    opening = new Promise((resolve) => {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${location.host}/ws/higgs`);
+      higgsWebSocket = ws;
+      const timeout = setTimeout(() => { if (!ready) { activateFallback('Higgs connection timed out; browser voice available.'); ws.close(); resolve(); } }, 18000);
+      ws.onopen = () => { textAt('turnStatus','Connecting to Higgs'); };
+      ws.onmessage = event => {
+        try {
+          const data = JSON.parse(event.data); handleHiggsServerEvent(data);
+          if (data.type === 'session.updated' || (data.type === 'session.created' && data.session?.upstream === 'NOT_CONNECTED')) {
+            clearTimeout(timeout); resolve();
+          }
+        } catch(error) { reportAudio('Invalid voice event: ' + error.message); }
+      };
+      ws.onerror = () => { clearTimeout(timeout); activateFallback('Voice socket failed; browser fallback enabled.'); resolve(); };
+      ws.onclose = () => { clearTimeout(timeout); if (isVoiceActive) activateFallback('Voice connection closed; browser fallback enabled.'); ready = false; opening = null; resolve(); };
+    });
+    return opening;
+  };
+
+  initSpeechRecognition = function() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) return null;
+    const rec = new SpeechRec(); rec.continuous = true; rec.interimResults = false; rec.lang='es-EC';
+    rec.onresult = event => {
+      if (!useBrowserTtsFallback || isAudioSpeaking) return;
+      const text = event.results[event.results.length-1][0].transcript.trim();
+      if (text) { appendChat('user',text); processSpokenCommand(text); }
+    };
+    rec.onerror = e => { if (!['aborted','no-speech'].includes(e.error)) reportAudio('Microphone recognition: ' + e.error); };
+    rec.onend = () => setTimeout(restartRecognition,250);
+    return rec;
+  };
+
+  startLiveVoice = async function() {
+    if (isVoiceActive) return;
+    try {
+      await unlockAudio();
+      micStream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      const source = audioContext.createMediaStreamSource(micStream);
+      analyserNode = audioContext.createAnalyser(); analyserNode.fftSize=128;
+      micDataArray=new Uint8Array(analyserNode.frequencyBinCount); source.connect(analyserNode);
+      silentGainNode=audioContext.createGain(); silentGainNode.gain.value=0;
+      scriptProcessorNode=audioContext.createScriptProcessor(2048,1,1);
+      source.connect(scriptProcessorNode); scriptProcessorNode.connect(silentGainNode); silentGainNode.connect(audioContext.destination);
+      scriptProcessorNode.onaudioprocess = event => {
+        if (!isVoiceActive || !ready || higgsWebSocket?.readyState !== WebSocket.OPEN || higgsWebSocket.bufferedAmount>262144) return;
+        const input=event.inputBuffer.getChannelData(0), ratio=audioContext.sampleRate/24000;
+        const count=Math.floor(input.length/ratio), bytes=new Uint8Array(count*2), view=new DataView(bytes.buffer);
+        for(let i=0;i<count;i++) {
+          const at=i*ratio, index=Math.floor(at), next=Math.min(index+1,input.length-1), fraction=at-index;
+          const s=Math.max(-1,Math.min(1,input[index]*(1-fraction)+input[next]*fraction));
+          view.setInt16(i*2,Math.round(s*(s<0?32768:32767)),true);
+        }
+        let raw=''; for(const b of bytes) raw+=String.fromCharCode(b);
+        send({type:'input_audio_buffer.append',audio:btoa(raw)});
+      };
+      isVoiceActive=true; greetingPending=true;
+      el('liveMicBtn').disabled=true; el('stopMicBtn').disabled=false;
+      textAt('agentStateTitle','Ralphi is listening');
+      await initBosonSession();
+      if (useBrowserTtsFallback) { restartRecognition(); speakText('Hola Rafael. El audio alternativo esta disponible mientras reconectamos Higgs.',true); }
+    } catch(error) {
+      reportAudio('Microphone: '+error.message+'. HTTPS or localhost and permission are required.');
+      isVoiceActive=false; if(el('liveMicBtn')) el('liveMicBtn').disabled=false;
+      speakText('El microfono necesita permiso. Puedes escribir tu pregunta.',true);
+    }
+  };
+
+  stopLiveVoice = function() {
+    isVoiceActive=false; greetingPending=false; ready=false; opening=null;
+    cancelAllAudioPlayback();
+    try { recognition?.abort(); scriptProcessorNode?.disconnect(); silentGainNode?.disconnect(); higgsWebSocket?.close(); } catch(_) {}
+    micStream?.getTracks().forEach(track=>track.stop()); micStream=null;
+    higgsWebSocket=null; scriptProcessorNode=null;
+    if(el('liveMicBtn')) el('liveMicBtn').disabled=false;
+    if(el('stopMicBtn')) el('stopMicBtn').disabled=true;
+    textAt('turnStatus','Stopped');
+  };
+
+  processSpokenCommand = async function(text) {
+    await unlockAudio();
+    if (isAudioSpeaking) triggerInstantBargeIn();
+    if (!higgsWebSocket || higgsWebSocket.readyState !== WebSocket.OPEN) await initBosonSession();
+    if (ready && higgsWebSocket?.readyState === WebSocket.OPEN) {
+      send({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text}]}});
+      send({type:'response.create'}); return;
+    }
+    try {
+      const response=await fetch('/api/boson/converse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({utterance:text,active_proposal_id:activeProposalId,session_id:dialogueId})});
+      const data=await response.json();
+      const answer=data.reply || data.error || 'No se pudo obtener una respuesta.';
+      appendChat('agent',answer); speakText(answer,true);
+      for(const rec of data.tool_records || []) recordToolCall(rec.tool_name,rec.arguments,rec.output,rec.duration_ms || 0);
+      if(data.proposal?.proposal_id) {activeProposalId=data.proposal.proposal_id;showProposalCard(activeProposalId,data.proposal.summary,data.subsystem);}
+    } catch(error) { reportAudio(error.message); }
+  };
+
+  // Waveform is an indicator only: ambient venue noise must not mute the assistant.
+  initWaveform = function() {
+    const canvas=el('waveformCanvas'); if(!canvas) return;
+    const ctx=canvas.getContext('2d');
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if(analyserNode && micDataArray) analyserNode.getByteFrequencyData(micDataArray);
+      for(let i=0;i<24;i++) {
+        const h=micDataArray ? Math.max(3,(micDataArray[i] || 0)/255*canvas.height*0.8):3;
+        ctx.fillStyle=isAudioSpeaking?'#10b981':'#0284c7';
+        ctx.fillRect((canvas.width-264)/2+i*11,(canvas.height-h)/2,6,h);
+      }
+      animationFrameId=requestAnimationFrame(draw);
+    } draw();
+  };
+  const oldVoiceStatus=fetchVoiceStatus;
+  fetchVoiceStatus=async function(){const source=currentAudioSource; await oldVoiceStatus(); if(source !== 'NONE') setAudioSource(source);};
+  document.addEventListener('DOMContentLoaded',()=>{
+    currentHtrTotal=0; textAt('htrCounter','0.0');
+    const start=el('liveMicBtn');
+    if(start){const btn=document.createElement('button');btn.textContent='Test audio';btn.className=start.className;btn.type='button';btn.onclick=async()=>{await unlockAudio();speakText('Prueba de audio. Si escuchas esta frase, la salida de voz esta activa.',true);};start.parentNode.appendChild(btn);}
+    document.querySelectorAll('.bubble-meta').forEach(node=>{if(node.textContent.includes('HIGGS'))node.textContent='VOICEOPS';});
+  });
+})();
+
+// Render only provider observations; never leave placeholder readings looking live.
+(() => {
+  let fetching = false;
+  const set=(id,value)=>{const node=document.getElementById(id);if(node)node.textContent=value ?? 'Not available';};
+  const num=(n,unit)=>n===null||n===undefined?'Not available':`${n} ${unit}`;
+  fetchTelemetry = async function(){
+    if(fetching)return;fetching=true;
+    try{
+      const response=await fetch('/api/telemetry');if(!response.ok)throw Error(`HTTP ${response.status}`);
+      const payload=await response.json();const s=payload.subsystems || {};
+      for(const [key,prefix] of [['solar_power','sol'],['telephony','tel'],['network_wifi','net'],['security_alarm','alarm'],['video_surveillance','cam'],['dmx_lighting','dmx']]){
+        const data=s[key] || {};updateTruthBadge(prefix+'Truth',data.truth || 'UNVERIFIED');
+        set(prefix+'Status',data.status || data.truth || 'UNVERIFIED');
+        const age=data.freshness_seconds;
+        set(prefix+'Provider',`${data.source_provider || 'Unconfigured'}${Number.isFinite(age)?' | Observation age: '+Math.round(age)+'s':''}`);
+      }
+      const solar=s.solar_power || {};
+      set('solGen',num(solar.inverter_output_watts ?? solar.solar_generation_watts,'W AC output'));
+      set('solBat',`${num(solar.battery_charge_pct,'% estimated')} | ${num(solar.battery_voltage_volts,'V')}`);
+      set('solGrid',`${num(solar.grid_voltage_volts,'V')} | breaker ${num(solar.phase_a_power_watts,'W')}`);
+      const phone=s.telephony || {};const peers=phone.peers || phone.registered_extensions || [];
+      set('telExts',phone.truth==='LIVE' ? peers.map(p=>`${p.ext}: ${p.registered===true||p.status==='ONLINE'?'registered':p.status || 'unavailable'}`).join(' | ') || 'No registered owner phones' : 'Status unverified');
+      set('telQuality',phone.scope || 'No call-quality measurement available');
+      set('telProvider',phone.source_provider || 'PBX not connected');
+      const net=s.network_wifi || {};
+      set('netWan',net.wan_online===true?'WAN online':net.wan_online===false?'WAN offline':'Not available');
+      set('netLoss','Not measured');set('netSwitch','UniFi via Home Assistant');
+      document.getElementById('cardNetwork')?.classList.remove('alert');
+      const alarm=s.security_alarm || {};
+      set('alarmStatus',alarm.arm_mode || alarm.status || 'UNVERIFIED');
+      set('alarmZones',alarm.monitored_zones_count===null||alarm.monitored_zones_count===undefined?'Zone count not provided':alarm.monitored_zones_count);
+      set('alarmTrigger',alarm.truth==='LIVE' ? alarm.is_triggered?'TRIGGERED':'No active trigger':'Not available');
+      const camera=s.video_surveillance || {};
+      set('camChannels',`NVR presence: ${camera.presence || 'unverified'}`);set('camStatus','PRESENCE ONLY');
+      set('camMotion','Motion and image feed not connected');set('dmxScene',s.dmx_lighting?.truth==='LIVE'?(s.dmx_lighting.active_scene || 'Engine idle'):'Not connected');
+      const server=s.servers_rack || {};set('serverMetrics',server.truth==='LIVE'?`Primary host | RAM ${server.memory_used_gb}/${server.memory_total_gb} GB | Load ${server.cpu_load_avg?.[0]?.toFixed(2)}`:'Server metrics unavailable');
+      set('telemetrySyncTime','Last read '+new Date(payload.query_timestamp).toLocaleTimeString());
+      set('alertMessage','Unavailable integrations remain marked as such. No invented readings or call-quality statistics.');
+    }catch(error){set('telemetrySyncTime','Telemetry read failed: '+error.message);}
+    finally{fetching=false;}
+  };
+  appendChat=function(role,text){
+    const box=document.getElementById('transcriptBox');if(!box)return;
+    const bubble=document.createElement('div');bubble.className='chat-bubble '+role;
+    const meta=document.createElement('span');meta.className='bubble-meta';
+    meta.textContent=role==='user'?'RAFAEL / OPERATOR':role==='agent'?(bosonConnectionMode==='relay'?'BOSON HIGGS':'LOCAL QWEN / VOICE FALLBACK'):'SYSTEM';
+    const p=document.createElement('p');p.textContent=text;bubble.append(meta,p);box.append(bubble);box.scrollTop=box.scrollHeight;
+  };
+  renderProviderStatus=function(data){
+    const list=document.getElementById('providerStatusList');if(!list)return;list.replaceChildren();
+    for(const [name,info] of Object.entries(data.providers || {})){
+      const row=document.createElement('div');row.className='data-row';
+      const label=document.createElement('span');label.textContent=name.replaceAll('_',' ');
+      const state=document.createElement('strong');state.textContent=info.mode || 'NOT_CONNECTED';
+      state.title=info.note || info.source || '';row.append(label,state);list.append(row);
+    }
+  };
+  triggerScenario=function(name){
+    const prompts={inspect:'Revisa la casa con datos actuales y dime que fuentes estan disponibles.',code_switch:'Check the battery voltage y responde en espanol.',incident_analysis:'Con los datos disponibles, que podemos confirmar y que no sobre el problema de energia de ayer?',approve:'Propone crear un ticket de incidente local con la evidencia actual.',reject:'No, cancela esa propuesta.'};
+    if(name==='barge_in'){triggerInstantBargeIn();return;}
+    const text=prompts[name];if(!text)return;appendChat('user',text);processSpokenCommand(text);
+  };
+  document.addEventListener('DOMContentLoaded',()=>{
+    const box=document.getElementById('transcriptBox');if(box)box.replaceChildren();
+    appendChat('system','Local runtime online. Start voice or type a question. Provider status is verified independently of the interface.');
+    document.querySelectorAll('[onclick*="Zoiper"], [onclick*="zoiper_test"]').forEach(button=>button.remove());
+    document.querySelectorAll('.pill-btn').forEach(button=>{button.textContent=button.textContent.replace('(<50ms)','').replace('(&lt;50ms)','');});
+    document.querySelectorAll('.subsystem-card .data-row span').forEach(node=>{
+      if(node.textContent==='PV Generation:')node.textContent='Inverter AC Output:';
+      if(node.textContent==='AP-SolarYard:')node.textContent='Packet loss:';
+      if(node.textContent==='SIP Quality:')node.textContent='Read scope:';
+    });
+    const server=document.createElement('div');server.id='serverMetrics';server.className='provider-sub';
+    document.getElementById('cardSolar')?.appendChild(server);
+    set('agentStateTitle','Ralphi / InnerOS VoiceOps');
+    set('agentStateSubtitle','Local operation with explicit provider status. Test audio before recording.');
+    const manual=document.getElementById('manualInput');if(manual)manual.placeholder='Escribe una pregunta sobre la casa o conversa con Ralphi...';
+  });
+})();
