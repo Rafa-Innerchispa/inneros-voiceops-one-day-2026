@@ -190,33 +190,49 @@ async function fetchTelemetry() {
       alertMsg.innerHTML = `<strong>[GUAYAQUIL ACTIVE ALERT]:</strong> ${data.active_alerts.join(" · ")}`;
     }
 
+    // Helper to update truth badge
+    function updateTruthBadge(elementId, truth) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      el.textContent = truth || "UNVERIFIED";
+      el.className = `truth-badge ${(truth || "unverified").toLowerCase()}`;
+    }
+
     const sub = data.subsystems;
     if (sub) {
       // 1. Solar Subsystem
       if (sub.solar_power) {
         const sol = sub.solar_power;
+        updateTruthBadge("solTruth", sol.truth);
         const solGen = document.getElementById("solGen");
         if (solGen) solGen.textContent = `${sol.solar_generation_watts?.toLocaleString() || 3840} W`;
         const solBat = document.getElementById("solBat");
         if (solBat) solBat.textContent = `${sol.battery_charge_pct || 94}% (${sol.battery_voltage_volts || 52.4}V)`;
         const solGrid = document.getElementById("solGrid");
-        if (solGrid) solGrid.textContent = sol.grid_synchronization?.replace("CONNECTED (", "").replace(")", "") || "224V / 60Hz GYE";
+        if (solGrid) solGrid.textContent = sol.grid_synchronization?.replace("CONNECTED (", "").replace(")", "") || "110V / 60Hz GYE";
+        const solProv = document.getElementById("solProvider");
+        if (solProv) solProv.textContent = `Source: ${sol.source_provider || "Growatt Hybrid SPF 5000 ES"}`;
       }
 
       // 2. Telephony Subsystem
       if (sub.telephony) {
         const tel = sub.telephony;
+        updateTruthBadge("telTruth", tel.truth);
         const telExts = document.getElementById("telExts");
-        if (telExts) telExts.textContent = `${tel.registered_extensions?.length || 4} Registered (100-103)`;
+        const extsList = (tel.registered_extensions || []).map(e => e.ext).join(", ");
+        if (telExts) telExts.textContent = `${tel.registered_extensions?.length || 0} Registered (${extsList || "None"})`;
         const telQuality = document.getElementById("telQuality");
         if (telQuality && tel.trunk_quality) {
           telQuality.textContent = `Jitter ${tel.trunk_quality.jitter_ms}ms (MOS ${tel.trunk_quality.mos_score})`;
         }
+        const telProv = document.getElementById("telProvider");
+        if (telProv) telProv.textContent = `Source: ${tel.source_provider || "Grandstream AMI TCP 7777"}`;
       }
 
       // 3. Network Subsystem
       if (sub.network_wifi) {
         const net = sub.network_wifi;
+        updateTruthBadge("netTruth", net.truth);
         const netWan = document.getElementById("netWan");
         if (netWan) netWan.textContent = net.primary_wan?.replace("1.0 Gbps Fiber (Telconet GYE) - ", "") || "1.0 Gbps (RTT 3.8ms)";
         const netLoss = document.getElementById("netLoss");
@@ -234,6 +250,16 @@ async function fetchTelemetry() {
             netSwitch.textContent = `MikroTik ${match[2]} (${match[1]})`;
           }
         }
+        const netProv = document.getElementById("netProvider");
+        if (netProv) netProv.textContent = `Source: ${net.source_provider || "UniFi Cloud Gateway Ultra"}`;
+      }
+
+      // 4. DMX Subsystem
+      if (sub.dmx_lighting) {
+        const dmx = sub.dmx_lighting;
+        updateTruthBadge("dmxTruth", dmx.truth);
+        const dmxProv = document.getElementById("dmxProvider");
+        if (dmxProv) dmxProv.textContent = `Source: ${dmx.source_provider || "Art-Net Universe 1 Bridge"}`;
       }
     }
   } catch (err) {

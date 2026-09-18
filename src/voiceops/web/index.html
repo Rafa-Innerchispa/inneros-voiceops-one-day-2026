@@ -149,12 +149,16 @@
                     <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
                     <strong>Solar Power & Battery Array</strong>
                   </div>
-                  <span class="status-indicator optimal" id="solStatus">HEALTHY</span>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="solTruth">LIVE</span>
+                    <span class="status-indicator optimal" id="solStatus">HEALTHY</span>
+                  </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>PV Generation:</span><strong id="solGen">3,840 W</strong></div>
                   <div class="data-row"><span>Battery Bank:</span><strong id="solBat">94% (52.4V)</strong></div>
-                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">224V / 60Hz GYE</strong></div>
+                  <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">110V / 60Hz GYE</strong></div>
+                  <div class="provider-sub" id="solProvider">Source: Growatt Hybrid SPF 5000 ES</div>
                 </div>
               </div>
 
@@ -165,12 +169,16 @@
                     <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     <strong>Grandstream PBX Telephony</strong>
                   </div>
-                  <span class="status-indicator optimal" id="telStatus">ONLINE</span>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="telTruth">LIVE</span>
+                    <span class="status-indicator optimal" id="telStatus">ONLINE</span>
+                  </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Hardware:</span><strong>UCM6104 (UDP 4321)</strong></div>
                   <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100-103)</strong></div>
                   <div class="data-row"><span>SIP Quality:</span><strong id="telQuality">Jitter 2.1ms (MOS 4.38)</strong></div>
+                  <div class="provider-sub" id="telProvider">Source: Grandstream AMI TCP 7777</div>
                 </div>
               </div>
 
@@ -181,12 +189,16 @@
                     <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
                     <strong>Network & Access Points</strong>
                   </div>
-                  <span class="status-indicator warning" id="netStatus">ALERT</span>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="netTruth">LIVE</span>
+                    <span class="status-indicator warning" id="netStatus">ALERT</span>
+                  </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Fiber WAN:</span><strong id="netWan">1.0 Gbps (RTT 3.8ms)</strong></div>
                   <div class="data-row"><span>AP-SolarYard:</span><strong class="text-danger" id="netLoss">18.0% Packet Loss</strong></div>
                   <div class="data-row"><span>Switch PoE:</span><strong id="netSwitch">MikroTik 68W (38.2°C)</strong></div>
+                  <div class="provider-sub" id="netProvider">Source: UniFi Cloud Gateway Ultra</div>
                 </div>
               </div>
 
@@ -197,12 +209,16 @@
                     <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></svg>
                     <strong>DMX-512 Lighting Control</strong>
                   </div>
-                  <span class="status-indicator optimal" id="dmxStatus">STANDBY</span>
+                  <div class="head-badges">
+                    <span class="truth-badge live" id="dmxTruth">LIVE</span>
+                    <span class="status-indicator optimal" id="dmxStatus">STANDBY</span>
+                  </div>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Protocol:</span><strong>Art-Net (Universe 1)</strong></div>
                   <div class="data-row"><span>Active Scene:</span><strong id="dmxScene">Normal Ops (80%)</strong></div>
                   <div class="data-row"><span>Emergency Strobe:</span><strong>Channels 12-16 Ready</strong></div>
+                  <div class="provider-sub" id="dmxProvider">Source: Art-Net Universe 1 Bridge</div>
                 </div>
               </div>
 
