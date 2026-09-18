@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
-  <title>InnerOS VoiceOps â€” Higgs Realtime S2S (Boson AI)</title>
+  <title>InnerOS VoiceOps — Higgs Realtime S2S (Boson AI)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="light-theme">
@@ -17,88 +17,101 @@
     <header class="app-header">
       <div class="header-left">
         <div class="brand-logo">
-          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
           <div class="brand-text">
             <span class="brand-title">InnerOS <strong>VoiceOps</strong></span>
-            <span class="brand-sub">Boson AI Â· Higgs Realtime S2S</span>
+            <span class="brand-sub">Boson AI · Higgs Realtime Speech-to-Speech</span>
           </div>
         </div>
         <div class="site-tag">
           <span class="pulse-dot green"></span>
-          <span>Nodo Guayaquil (GYE-Node-01 Â· Ecuador)</span>
+          <span>Guayaquil Operations Hub (GYE-Node-01)</span>
         </div>
       </div>
 
       <div class="header-center">
         <div class="model-badge">
-          <span class="badge-label">MODELO S2S</span>
+          <span class="badge-label">S2S ENGINE</span>
           <span class="badge-val">Higgs Realtime v1 (&le;125ms Interruption)</span>
         </div>
       </div>
 
       <div class="header-right">
         <div class="governance-status">
-          <span class="shield-icon">ðŸ›¡ï¸</span>
+          <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
           <span>Fail-Closed Governance Active</span>
         </div>
         <span class="badge-pill">NO PROD WRITES</span>
-        <button id="refreshTelemetryBtn" class="btn btn-outline btn-sm">â†» Sincronizar TelemetrÃ­a</button>
+        <button id="refreshTelemetryBtn" class="btn btn-outline btn-sm">Sync Telemetry</button>
       </div>
     </header>
 
     <!-- Critical Alert Banner -->
     <div id="alertBanner" class="alert-banner">
       <div class="alert-content">
-        <span class="alert-badge">ALERTA EN VIVO</span>
+        <span class="alert-badge">LIVE INCIDENT</span>
         <span id="alertMessage" class="alert-text">
-          Cargando telemetrÃ­a en tiempo real desde la infraestructura de Guayaquil...
+          Telemetry active: [NETWORK_WIFI] Alert on AP-SolarYard (18% Packet Loss) · [SOLAR] 3,840W Normal · [PBX] 4 Extensions Active
         </span>
       </div>
       <div class="alert-metrics">
-        <span class="metric-pill">Latencia S2S: <strong>~700ms</strong></span>
+        <span class="metric-pill">S2S Latency: <strong>~700ms</strong></span>
         <span class="metric-pill">Barge-in: <strong>&le;125ms</strong></span>
-        <span class="metric-pill">PBX Port: <strong>UDP 4321</strong></span>
+        <span class="metric-pill">PBX Bind: <strong>UDP 4321</strong></span>
       </div>
     </div>
 
     <!-- Main Workspace Container -->
     <main class="main-content">
 
-      <!-- Interactive Voice & Control Bar -->
+      <!-- Interactive Voice & Audio Hero -->
       <section class="voice-hero card">
         <div class="voice-hero-left">
           <div class="voice-avatar-wrap">
             <div id="voiceOrb" class="voice-orb idle">
-              <span class="orb-icon">ðŸŽ™ï¸</span>
+              <svg class="orb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
             </div>
             <div class="voice-meta">
-              <h2 id="agentStateTitle">Higgs Realtime Despachador</h2>
-              <p id="agentStateSubtitle">Listo para recibir Ã³rdenes o telemetrÃ­a en EspaÃ±ol / InglÃ©s / Spanglish</p>
+              <div class="voice-title-row">
+                <h2 id="agentStateTitle">Higgs Realtime Voice Dispatcher</h2>
+                <span id="audioPlayingTag" class="audio-tag hidden">SPEAKING AUDIO</span>
+              </div>
+              <p id="agentStateSubtitle">Continuous Speech-to-Speech with &le;125ms Barge-in & Mid-Conversation Tool Calling</p>
             </div>
           </div>
 
-          <canvas id="waveformCanvas" class="waveform-canvas" width="340" height="48"></canvas>
+          <div class="waveform-wrap">
+            <canvas id="waveformCanvas" class="waveform-canvas" width="280" height="42"></canvas>
+          </div>
         </div>
 
         <div class="voice-hero-controls">
           <div class="btn-group">
             <button id="liveMicBtn" class="btn btn-primary btn-lg">
-              <span class="icon">ðŸŽ™ï¸</span> Iniciar Voz en Vivo
+              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+              <span>Start Live Voice</span>
             </button>
             <button id="stopMicBtn" class="btn btn-secondary btn-lg" disabled>
-              <span class="icon">â¹ï¸</span> Detener
+              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
+              <span>Stop Voice</span>
             </button>
           </div>
 
-          <div class="scenario-shortcuts">
-            <span class="shortcuts-label">Escenarios de DemostraciÃ³n:</span>
-            <button class="pill-btn" onclick="triggerScenario('inspect')">1. DiagnÃ³stico Guayaquil</button>
-            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. InterrupciÃ³n (&lt;125ms)</button>
-            <button class="pill-btn" onclick="triggerScenario('code_switch')">3. Spanglish TÃ©cnico</button>
-            <button class="pill-btn" onclick="triggerScenario('approve')">4. AprobaciÃ³n Permiso</button>
-            <button class="pill-btn" onclick="triggerScenario('reject')">5. Rechazo Fail-Closed</button>
+          <div class="scenario-bar">
+            <span class="scenario-label">Judge Demo Scenarios:</span>
+            <button class="pill-btn" onclick="triggerScenario('inspect')">1. Full Site Diagnostics</button>
+            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. Instant Barge-In (&lt;125ms)</button>
+            <button class="pill-btn" onclick="triggerScenario('code_switch')">3. Technical Code-Switching</button>
+            <button class="pill-btn" onclick="triggerScenario('approve')">4. Governed Action Approval</button>
+            <button class="pill-btn" onclick="triggerScenario('reject')">5. Fail-Closed Ambiguity Block</button>
           </div>
         </div>
       </section>
@@ -110,7 +123,7 @@
         <aside class="col-telemetry">
           <div class="card panel">
             <div class="panel-header">
-              <h3>ðŸŽ›ï¸ TelemetrÃ­a del Sitio (Guayaquil)</h3>
+              <h3>Site Telemetry (Guayaquil)</h3>
               <span class="badge-live">LIVE FEED</span>
             </div>
             <div class="subsystems-list">
@@ -118,56 +131,64 @@
               <!-- Solar Card -->
               <div class="subsystem-card" id="cardSolar">
                 <div class="subsystem-head">
-                  <span class="sub-icon">â˜€ï¸</span>
-                  <strong>EnergÃ­a Solar & BaterÃ­as</strong>
-                  <span class="status-indicator optimal">OPTIMAL</span>
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                    <strong>Solar Power & Battery Array</strong>
+                  </div>
+                  <span class="status-indicator optimal">HEALTHY</span>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>GeneraciÃ³n Solar:</span><strong id="solGen">3,840 W</strong></div>
-                  <div class="data-row"><span>BaterÃ­a:</span><strong id="solBat">94% (52.4V)</strong></div>
-                  <div class="data-row"><span>Red ElÃ©ctrica:</span><strong>224V / 60Hz GYE</strong></div>
+                  <div class="data-row"><span>PV Generation:</span><strong id="solGen">3,840 W</strong></div>
+                  <div class="data-row"><span>Battery Bank:</span><strong id="solBat">94% (52.4V)</strong></div>
+                  <div class="data-row"><span>Grid Sync:</span><strong>224V / 60Hz GYE</strong></div>
                 </div>
               </div>
 
               <!-- Telephony Card -->
               <div class="subsystem-card" id="cardTelephony">
                 <div class="subsystem-head">
-                  <span class="sub-icon">ðŸ“ž</span>
-                  <strong>TelefonÃ­a PBX Grandstream</strong>
-                  <span class="status-indicator optimal">OPTIMAL</span>
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <strong>Grandstream PBX Telephony</strong>
+                  </div>
+                  <span class="status-indicator optimal">ONLINE</span>
                 </div>
                 <div class="subsystem-body">
                   <div class="data-row"><span>Hardware:</span><strong>UCM6104 (v1.0.20)</strong></div>
-                  <div class="data-row"><span>Extensiones:</span><strong id="telExts">4 Activas (100-103)</strong></div>
-                  <div class="data-row"><span>Troncal:</span><strong>SIP CNT Ecuador</strong></div>
+                  <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100-103)</strong></div>
+                  <div class="data-row"><span>Trunk Route:</span><strong>VoIP CNT Ecuador</strong></div>
                 </div>
               </div>
 
               <!-- WiFi / Network Card -->
               <div class="subsystem-card alert" id="cardNetwork">
                 <div class="subsystem-head">
-                  <span class="sub-icon">ðŸ“¶</span>
-                  <strong>Red & Puntos de Acceso</strong>
-                  <span class="status-indicator warning">ALERTA</span>
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+                    <strong>Network & Access Points</strong>
+                  </div>
+                  <span class="status-indicator warning">ALERT</span>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>Fibra WAN:</span><strong>1 Gbps (RTT 3.8ms)</strong></div>
+                  <div class="data-row"><span>Fiber WAN:</span><strong>1.0 Gbps (RTT 3.8ms)</strong></div>
                   <div class="data-row"><span>AP-SolarYard:</span><strong class="text-danger">18% Packet Loss</strong></div>
-                  <div class="data-row"><span>LTE Respaldo:</span><strong>Claro LTE (Standby)</strong></div>
+                  <div class="data-row"><span>Backup WAN:</span><strong>Claro LTE (Standby)</strong></div>
                 </div>
               </div>
 
               <!-- DMX Lighting Card -->
               <div class="subsystem-card" id="cardDmx">
                 <div class="subsystem-head">
-                  <span class="sub-icon">ðŸ’¡</span>
-                  <strong>IluminaciÃ³n & DMX-512</strong>
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></svg>
+                    <strong>DMX-512 Lighting Control</strong>
+                  </div>
                   <span class="status-indicator optimal">STANDBY</span>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>Protocolo:</span><strong>Art-Net Univ 1</strong></div>
-                  <div class="data-row"><span>PerÃ­metro:</span><strong>Auto-dusk 18:30</strong></div>
-                  <div class="data-row"><span>Balizas Emergencia:</span><strong>Canales 12-16 Ready</strong></div>
+                  <div class="data-row"><span>Protocol:</span><strong>Art-Net (Universe 1)</strong></div>
+                  <div class="data-row"><span>Perimeter Lights:</span><strong>Auto-dusk (18:30)</strong></div>
+                  <div class="data-row"><span>Emergency Strobe:</span><strong>Channels 12-16 Ready</strong></div>
                 </div>
               </div>
 
@@ -179,32 +200,41 @@
         <section class="col-conversation">
           <div class="card panel flex-col flex-1">
             <div class="panel-header">
-              <h3>ðŸ’¬ TranscripciÃ³n & Tool Calls en Tiempo Real</h3>
-              <span id="turnStatus" class="status-badge">Turno en Espera</span>
+              <h3>Live Dialogue & Tool Stream</h3>
+              <span id="turnStatus" class="status-badge">Standby / Ready</span>
+            </div>
+
+            <!-- Live Action Execution Step Ticker -->
+            <div class="current-step-box">
+              <div class="step-indicator-wrap">
+                <span class="pulse-dot blue"></span>
+                <strong id="activeStepLabel">System Ready</strong>
+              </div>
+              <span id="activeStepDetail" class="step-detail">Listening for voice or simulated input...</span>
             </div>
 
             <div id="transcriptBox" class="transcript-box">
               <div class="chat-bubble system">
-                <span class="bubble-meta">SISTEMA Â· INICIALIZADO</span>
-                <p>SesiÃ³n Higgs Realtime conectada. El despachador tiene acceso a las herramientas de telemetrÃ­a y ejecuciÃ³n gobernada para Guayaquil.</p>
+                <span class="bubble-meta">SYSTEM INITIALIZED</span>
+                <p>Boson AI Higgs Realtime S2S session connected. The agent has direct access to Guayaquil telemetry tools, instant barge-in, and fail-closed operational permits.</p>
               </div>
             </div>
 
             <!-- Live Tool Call Ticker -->
             <div class="tool-call-section">
               <div class="tool-header">
-                <span class="tool-title">âš¡ Mid-Conversation Function Calling (Higgs &rarr; VoiceOps)</span>
+                <span class="tool-title">⚡ Mid-Conversation Function Calls (Higgs &rarr; VoiceOps)</span>
                 <span id="toolLatency" class="tool-latency">0 ms</span>
               </div>
               <div id="toolStream" class="tool-stream">
-                <div class="tool-item empty">Las llamadas a funciones en vivo se mostrarÃ¡n aquÃ­ sin pausar la voz.</div>
+                <div class="tool-item empty">Live tool executions stream here mid-speech with zero conversational delay.</div>
               </div>
             </div>
 
-            <!-- Manual Input Box for Judging -->
+            <!-- Manual Input Bar -->
             <div class="chat-input-bar">
-              <input type="text" id="manualInput" placeholder="Escribe un comando por voz simulado (ej: 'Revisa el WiFi y reinicia el AP degradado')..." />
-              <button id="sendManualBtn" class="btn btn-primary">Enviar</button>
+              <input type="text" id="manualInput" placeholder="Type a simulated voice instruction (e.g., 'Inspect the network and propose a fix')..." />
+              <button id="sendManualBtn" class="btn btn-primary">Send</button>
             </div>
           </div>
         </section>
@@ -215,32 +245,32 @@
           <!-- Active Proposal / Approval Card -->
           <div class="card panel">
             <div class="panel-header">
-              <h3>ðŸ›¡ï¸ AprobaciÃ³n de Seguridad</h3>
-              <span id="approvalBadge" class="status-badge pending">SIN PROPUESTA</span>
+              <h3>Security Approval Gate</h3>
+              <span id="approvalBadge" class="status-badge pending">NO PROPOSAL</span>
             </div>
 
             <div id="proposalCard" class="proposal-card empty">
-              <p class="placeholder-text">Ninguna acciÃ³n propuesta requiere aprobaciÃ³n en este momento.</p>
+              <p class="placeholder-text">No proposed action is currently awaiting human confirmation.</p>
             </div>
 
             <div class="approval-actions" id="manualApprovalActions" style="display:none;">
-              <button id="confirmBtn" class="btn btn-success btn-block">âœ“ Autorizar (Frase Afirmativa)</button>
-              <button id="rejectBtn" class="btn btn-danger btn-block">âœ• Rechazar / Ambigua (Fail-Closed)</button>
+              <button id="confirmBtn" class="btn btn-success btn-block">✓ Authorize (Affirmative Speech)</button>
+              <button id="rejectBtn" class="btn btn-danger btn-block">✕ Reject / Ambiguous (Fail-Closed)</button>
             </div>
           </div>
 
           <!-- Cryptographic Receipt Card -->
           <div class="card panel">
             <div class="panel-header">
-              <h3>ðŸ“œ Recibo CriptogrÃ¡fico de AuditorÃ­a</h3>
+              <h3>Cryptographic Audit Receipt</h3>
               <span class="badge-pill">SHA-256 SEALED</span>
             </div>
             <div class="audit-body">
               <div class="data-row"><span>Permit ID:</span><code id="auditPermitId">vxp_none</code></div>
               <div class="data-row"><span>Action ID:</span><code id="auditActionId">act_none</code></div>
-              <div class="data-row"><span>Firma Digital:</span><code id="auditSignature">[sealed_hmac_256]</code></div>
+              <div class="data-row"><span>Signature:</span><code id="auditSignature">[sealed_hmac_256]</code></div>
               <div class="evidence-hash">
-                <span class="hash-label">Evidence SHA-256:</span>
+                <span class="hash-label">Evidence SHA-256 Hash:</span>
                 <span id="evidenceHash" class="hash-val">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
               </div>
             </div>
@@ -254,9 +284,9 @@
             </div>
             <div class="htr-value-wrap">
               <span id="htrCounter" class="htr-number">+0.0</span>
-              <span class="htr-unit">minutos</span>
+              <span class="htr-unit">minutes</span>
             </div>
-            <p class="htr-desc">Tiempo humano ahorrado en despacho, diagnÃ³stico manual y maniobras de campo.</p>
+            <p class="htr-desc">Human engineering time saved in manual field dispatch, diagnostic cycles, and PBX configuration.</p>
           </div>
 
         </aside>
@@ -266,8 +296,8 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <div>InnerOS VoiceOps Â· Boson AI Higgs Realtime S2S Hackathon 2026</div>
-      <div>Repositorio: <code>Rafa-Innerchispa/inneros-voiceops-one-day-2026</code> Â· Baseline: <code>pre-hackathon-2026-09-18</code></div>
+      <div>InnerOS VoiceOps · Boson AI Higgs Realtime S2S Hackathon 2026</div>
+      <div>Repository: <code>Rafa-Innerchispa/inneros-voiceops-one-day-2026</code> · Baseline: <code>pre-hackathon-2026-09-18</code></div>
     </footer>
 
   </div>

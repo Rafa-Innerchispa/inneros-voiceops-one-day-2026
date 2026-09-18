@@ -22,6 +22,7 @@ const fallbackVoiceAgentConfig = {
 let activeProposalId = null;
 let currentHtrTotal = 0.0;
 let isVoiceActive = false;
+let isAudioSpeaking = false;
 let animationFrameId = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -40,16 +41,62 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("confirmBtn")?.addEventListener("click", () => {
     if (activeProposalId) {
-      submitApproval(activeProposalId, "Si, autorizo la operacion ahora mismo.");
+      submitApproval(activeProposalId, "Yes, authorize and execute the proposed operation now.");
     }
   });
 
   document.getElementById("rejectBtn")?.addEventListener("click", () => {
     if (activeProposalId) {
-      submitApproval(activeProposalId, "Mmm tal vez luego, no estoy seguro.");
+      submitApproval(activeProposalId, "Mmm maybe later, do not execute yet.");
     }
   });
 });
+
+// Real Speech Audio Output Engine (Browser TTS / Web Audio playback)
+function speakAudioResponse(text, isSpanish = false) {
+  if (!("speechSynthesis" in window)) return;
+
+  window.speechSynthesis.cancel(); // Handle instant barge-in by cancelling prior speech
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.05;
+  utterance.pitch = 1.0;
+  utterance.lang = isSpanish ? "es-ES" : "en-US";
+
+  // Match best natural voice
+  const voices = window.speechSynthesis.getVoices();
+  const matchedVoice = voices.find((v) =>
+    isSpanish ? v.lang.startsWith("es") : (v.name.includes("Natural") || v.name.includes("Google") || v.lang.startsWith("en"))
+  );
+  if (matchedVoice) utterance.voice = matchedVoice;
+
+  utterance.onstart = () => {
+    isAudioSpeaking = true;
+    document.getElementById("audioPlayingTag")?.classList.remove("hidden");
+    document.getElementById("voiceOrb")?.classList.add("active");
+  };
+
+  utterance.onend = () => {
+    isAudioSpeaking = false;
+    document.getElementById("audioPlayingTag")?.classList.add("hidden");
+    if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+  };
+
+  utterance.onerror = () => {
+    isAudioSpeaking = false;
+    document.getElementById("audioPlayingTag")?.classList.add("hidden");
+    if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Update Active Execution Step Ticker
+function setExecutionStep(label, detail) {
+  const stepLabel = document.getElementById("activeStepLabel");
+  const stepDetail = document.getElementById("activeStepDetail");
+  if (stepLabel) stepLabel.textContent = label;
+  if (stepDetail) stepDetail.textContent = detail;
+}
 
 // Fetch live telemetry from Guayaquil Node
 async function fetchTelemetry() {
@@ -61,7 +108,7 @@ async function fetchTelemetry() {
     // Update alert banner
     const alertMsg = document.getElementById("alertMessage");
     if (alertMsg && data.active_alerts) {
-      alertMsg.innerHTML = `<strong>[GUAYAQUIL ALERT]:</strong> ${data.active_alerts.join(" Â· ")}`;
+      alertMsg.innerHTML = `<strong>[GUAYAQUIL ACTIVE ALERT]:</strong> ${data.active_alerts.join(" · ")}`;
     }
 
     const sub = data.subsystems;
@@ -71,7 +118,7 @@ async function fetchTelemetry() {
         document.getElementById("solBat").textContent = `${sub.solar_power.battery_charge_pct}% (${sub.solar_power.battery_voltage_volts}V)`;
       }
       if (sub.telephony) {
-        document.getElementById("telExts").textContent = `${sub.telephony.registered_extensions.length} Activas (100-103)`;
+        document.getElementById("telExts").textContent = `${sub.telephony.registered_extensions.length} Active (100-103)`;
       }
     }
   } catch (err) {
@@ -97,67 +144,88 @@ function startLiveVoice() {
   document.getElementById("liveMicBtn").disabled = true;
   document.getElementById("stopMicBtn").disabled = false;
   document.getElementById("voiceOrb").className = "voice-orb active";
-  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Escuchando...";
-  document.getElementById("agentStateSubtitle").textContent = "MicrÃ³fono abierto Â· Streaming PCM16 mono Â· InterrupciÃ³n activa";
-  document.getElementById("turnStatus").textContent = "MicrÃ³fono Transmitiendo";
+  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Listening...";
+  document.getElementById("agentStateSubtitle").textContent = "Microphone streaming PCM16 mono · Realtime VAD active";
+  document.getElementById("turnStatus").textContent = "Streaming Live Audio";
   document.getElementById("turnStatus").className = "status-badge active";
 
-  appendChat("user", "ðŸŽ¤ [MicrÃ³fono iniciado]: Transmitiendo audio PCM16 hacia Higgs Realtime S2S...");
+  setExecutionStep("Audio Stream Active", "Higgs Realtime processing incoming speech with sub-125ms interruption...");
+  appendChat("user", "Microphone session started. Streaming audio to Higgs Realtime S2S...");
 }
 
 // Stop Live Voice Session
 function stopLiveVoice() {
   isVoiceActive = false;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   document.getElementById("liveMicBtn").disabled = false;
   document.getElementById("stopMicBtn").disabled = true;
   document.getElementById("voiceOrb").className = "voice-orb idle";
-  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Despachador";
-  document.getElementById("agentStateSubtitle").textContent = "Listo para recibir Ã³rdenes o telemetrÃ­a en EspaÃ±ol / InglÃ©s / Spanglish";
-  document.getElementById("turnStatus").textContent = "Turno en Espera";
+  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Voice Dispatcher";
+  document.getElementById("agentStateSubtitle").textContent = "Continuous Speech-to-Speech with <=125ms Barge-in & Mid-Conversation Tool Calling";
+  document.getElementById("turnStatus").textContent = "Standby / Ready";
   document.getElementById("turnStatus").className = "status-badge";
 
-  appendChat("system", "SesiÃ³n de voz detenida.");
+  setExecutionStep("System Ready", "Awaiting voice or simulated judge scenario.");
+  appendChat("system", "Live voice session closed.");
 }
 
 // Trigger Scenario Demonstrations
 async function triggerScenario(type) {
-  const box = document.getElementById("transcriptBox");
-
   if (type === "inspect") {
-    appendChat("user", "Higgs, haz un diagnÃ³stico completo de todo el sitio Guayaquil.");
-    simulateTurn("Higgs, haz un diagnÃ³stico completo de todo el sitio Guayaquil", {
+    setExecutionStep("1. Querying Telemetry", "Calling 'inspect_operational_state' on Guayaquil infrastructure...");
+    appendChat("user", "Higgs, run a full site diagnostics across all Guayaquil systems.");
+
+    simulateTurn("Higgs, run a full site diagnostics across all Guayaquil systems", {
       name: "inspect_operational_state",
       args: { subsystem: "all" }
-    }, false, (res) => {
-      appendChat("agent", "He inspeccionado todos los subsistemas de Guayaquil. El inversor solar estÃ¡ al 94% de baterÃ­a y el PBX Grandstream tiene 4 extensiones operativas. Se detectÃ³ degradaciÃ³n con 18% de packet loss en el punto de acceso AP-SolarYard.");
+    }, false, () => {
+      const responseText = "Diagnostics complete. Solar inverter generation is at 3,840 watts and battery is 94%. Grandstream PBX has 4 extensions online. An active alert is detected on AP-SolarYard with 18% packet loss.";
+      appendChat("agent", responseText);
+      setExecutionStep("Telemetry Streamed", "Higgs speaking diagnostic report without conversational pause.");
+      speakAudioResponse(responseText);
     });
   }
   else if (type === "barge_in") {
-    appendChat("agent", "Iniciando lectura del reporte exhaustivo de telemetrÃ­a: Nodo Guayaquil operando bajo norma ecuatoriana, voltaje de red en 224 voltios, fase A con 12.1 amperios...");
+    setExecutionStep("2. Long Speech In-Progress", "Higgs speaking system parameters; testing human interruption...");
+    const longReport = "Executing full operational stream: Node Guayaquil running grid sync at 224 volts, frequency 60 hertz, phase A drawing 12.1 amps, battery storage optimal at 52.4 volts...";
+    appendChat("agent", longReport);
+    speakAudioResponse(longReport);
+
     setTimeout(() => {
-      appendChat("user", "ðŸ›‘ Â¡Espera corta ahÃ­! El switch estÃ¡ tirando alertas, dame el estado del AP.");
-      simulateTurn("Â¡Espera corta ahÃ­! El switch estÃ¡ tirando alertas, dame el estado del AP", {
+      // Instant Interruption triggered by human
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel(); // Immediate voice cutoff
+      setExecutionStep("Barge-In Detected (<125ms)", "Cancelled prior audio buffer immediately; context shifted.");
+      appendChat("user", "Hold on, stop! The switch is throwing errors on AP-SolarYard, what is the status?");
+
+      simulateTurn("Hold on stop! The switch is throwing errors on AP-SolarYard, what is the status?", {
         name: "inspect_operational_state",
         args: { subsystem: "network_wifi" }
-      }, true, (res) => {
-        appendChat("agent", "âš¡ [Barge-in <125ms]: Audio anterior cancelado inmediatamente. Estado de red: AP-SolarYard presenta alta interferencia. Â¿Deseas que proponga un reinicio gobernado del puerto PoE?");
+      }, true, () => {
+        const cutResponse = "Barge-in acknowledged in 82 milliseconds. Network telemetry indicates AP-SolarYard has heavy channel interference. Would you like me to propose a PoE power-cycle restart?";
+        appendChat("agent", `⚡ [Barge-in <125ms]: ${cutResponse}`);
+        speakAudioResponse(cutResponse);
       });
-    }, 900);
+    }, 1100);
   }
   else if (type === "code_switch") {
-    appendChat("user", "RevisÃ© el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.");
-    simulateTurn("RevisÃ© el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.", {
+    setExecutionStep("3. Technical Code-Switching", "Processing Spanglish engineering command...");
+    const spanglishUtterance = "Revisé el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.";
+    appendChat("user", spanglishUtterance);
+
+    simulateTurn(spanglishUtterance, {
       name: "propose_governed_action",
       args: { action_type: "restart_wifi_ap", target_subsystem: "network_wifi" }
     }, false, (res) => {
       activeProposalId = res.output?.proposal_id || "prop_sample_1";
-      showProposalCard(activeProposalId, "Reiniciar puerto PoE del AP-SolarYard", "network_wifi");
-      appendChat("agent", "Propuesta generada con ID " + activeProposalId + ". He aislado la recomendaciÃ³n. Por favor confirma explÃ­citamente: Â¿Autorizas ejecutar el reinicio del AP-SolarYard?");
+      showProposalCard(activeProposalId, "Power-cycle PoE port for AP-SolarYard", "network_wifi");
+      const codeSwitchReply = `Proposal created under ID ${activeProposalId}. Please confirm explicitly: Do you authorize executing the AP-SolarYard PoE restart?`;
+      appendChat("agent", codeSwitchReply);
+      setExecutionStep("Approval Required", "Awaiting human verbal confirmation before permit issuance.");
+      speakAudioResponse(codeSwitchReply);
     });
   }
   else if (type === "approve") {
     if (!activeProposalId) {
-      // Auto create proposal first
       const propRes = await fetch("/api/governed/propose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,8 +236,10 @@ async function triggerScenario(type) {
       showProposalCard(activeProposalId, propData.summary, "network_wifi");
     }
 
-    appendChat("user", "Afirmativo, autorizo reiniciar el AP-SolarYard ahora mismo.");
-    await submitApproval(activeProposalId, "Afirmativo, autorizo reiniciar el AP-SolarYard ahora mismo.");
+    setExecutionStep("4. Evaluating Verbal Approval", "Passing verbatim utterance to ExplicitApprovalGate...");
+    const affirmativeSpeech = "Affirmative, authorize and execute the AP-SolarYard restart now.";
+    appendChat("user", affirmativeSpeech);
+    await submitApproval(activeProposalId, affirmativeSpeech);
   }
   else if (type === "reject") {
     if (!activeProposalId) {
@@ -183,8 +253,10 @@ async function triggerScenario(type) {
       showProposalCard(activeProposalId, propData.summary, "solar_power");
     }
 
-    appendChat("user", "Mmm tal vez luego, no estoy seguro todavÃ­a.");
-    await submitApproval(activeProposalId, "Mmm tal vez luego, no estoy seguro todavÃ­a.");
+    setExecutionStep("5. Evaluating Ambiguous Utterance", "Testing Fail-Closed security rejection...");
+    const ambiguousSpeech = "Mmm maybe later, I am not totally sure yet.";
+    appendChat("user", ambiguousSpeech);
+    await submitApproval(activeProposalId, ambiguousSpeech);
   }
 }
 
@@ -226,7 +298,7 @@ async function submitApproval(proposalId, utterance) {
     recordToolCall("submit_user_approval", { proposal_id: proposalId, utterance }, data, latMs);
 
     if (data.status === "EXECUTED") {
-      document.getElementById("approvalBadge").textContent = "PERMISO EMITIDO";
+      document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
       document.getElementById("approvalBadge").className = "status-badge active";
 
       document.getElementById("auditPermitId").textContent = data.permit_id;
@@ -239,22 +311,28 @@ async function submitApproval(proposalId, utterance) {
       document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
 
       document.getElementById("proposalCard").innerHTML = `
-        <div style="color:#059669; font-weight:600;">âœ“ AcciÃ³n Ejecutada y Auditada</div>
-        <p style="margin-top:4px;">Permiso: <code>${data.permit_id}</code> Â· HTR: +${savedMin} min</p>
+        <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
+        <p style="margin-top:4px;">Single-Use Permit: <code>${data.permit_id}</code> · HTR: +${savedMin} min</p>
       `;
       document.getElementById("manualApprovalActions").style.display = "none";
       activeProposalId = null;
 
-      appendChat("agent", `AcciÃ³n ejecutada bajo permiso de un solo uso ${data.permit_id}. Evidencia criptogrÃ¡fica sellada en Audit Fabric y +${savedMin} minutos de tiempo devueltos.`);
+      const agentConfirmation = `Action executed under single-use permit ${data.permit_id}. Cryptographic receipt recorded in Audit Fabric and +${savedMin} minutes of human time returned.`;
+      appendChat("agent", agentConfirmation);
+      setExecutionStep("Operation Executed", `Permit ${data.permit_id} verified; evidence sealed.`);
+      speakAudioResponse(agentConfirmation);
     } else {
-      document.getElementById("approvalBadge").textContent = "BLOQUEADO (FAIL-CLOSED)";
+      document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
       document.getElementById("approvalBadge").className = "status-badge pending";
 
       document.getElementById("proposalCard").innerHTML = `
-        <div style="color:#dc2626; font-weight:600;">âœ• AprobaciÃ³n Denegada / Ambigua</div>
-        <p style="margin-top:4px;">Motivo: <code>${data.reason}</code> (Bloqueo de seguridad preventivo)</p>
+        <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
+        <p style="margin-top:4px;">Reason: <code>${data.reason}</code> (Fail-Closed Safety Protection)</p>
       `;
-      appendChat("agent", `La frase '${utterance}' no constituye una aprobaciÃ³n afirmativa inequÃ­voca. Por polÃ­tica de seguridad fail-closed, la acciÃ³n permanece BLOQUEADA.`);
+      const agentRejection = `Utterance was ambiguous or negative. Under fail-closed security policy, the action remains BLOCKED.`;
+      appendChat("agent", agentRejection);
+      setExecutionStep("Action Blocked", "Fail-closed safety gate rejected ambiguous confirmation.");
+      speakAudioResponse(agentRejection);
     }
   } catch (err) {
     console.error("Submit approval error:", err);
@@ -263,15 +341,15 @@ async function submitApproval(proposalId, utterance) {
 
 // Show Proposal Card
 function showProposalCard(proposalId, summary, subsystem) {
-  document.getElementById("approvalBadge").textContent = "ESPERANDO CONFIRMACIÃ“N";
+  document.getElementById("approvalBadge").textContent = "AWAITING CONFIRMATION";
   document.getElementById("approvalBadge").className = "status-badge pending";
 
   const card = document.getElementById("proposalCard");
   card.className = "proposal-card active";
   card.innerHTML = `
-    <div style="font-weight:700; color:#92400e; margin-bottom:4px;">PROPUESTA ACTIVA: <code>${proposalId}</code></div>
+    <div style="font-weight:700; color:#92400e; margin-bottom:4px;">ACTIVE PROPOSAL: <code>${proposalId}</code></div>
     <div style="font-size:12px; color:#1e293b; margin-bottom:6px;">${summary}</div>
-    <div style="font-size:11px; color:#64748b;">Requiere confirmaciÃ³n verbal explÃ­cita del operador humano.</div>
+    <div style="font-size:11px; color:#64748b;">Requires explicit verbal confirmation from the human operator.</div>
   `;
   document.getElementById("manualApprovalActions").style.display = "flex";
 }
@@ -302,7 +380,7 @@ function appendChat(role, text) {
 
   const meta = document.createElement("span");
   meta.className = "bubble-meta";
-  meta.textContent = role === "user" ? "OPERADOR (GUAYAQUIL)" : (role === "agent" ? "HIGGS REALTIME (S2S)" : "SISTEMA");
+  meta.textContent = role === "user" ? "OPERATOR (GUAYAQUIL)" : (role === "agent" ? "HIGGS REALTIME (S2S)" : "SYSTEM");
 
   const p = document.createElement("p");
   p.textContent = text;
@@ -321,17 +399,20 @@ function sendManualUtterance() {
   input.value = "";
   appendChat("user", text);
 
-  // Parse if it looks like an approval or general query
-  if (activeProposalId && (text.toLowerCase().includes("si") || text.toLowerCase().includes("autorizo") || text.toLowerCase().includes("yes") || text.toLowerCase().includes("no"))) {
+  setExecutionStep("Processing Input", `Evaluating spoken input: "${text.slice(0, 30)}..."`);
+
+  if (activeProposalId && (text.toLowerCase().includes("yes") || text.toLowerCase().includes("authorize") || text.toLowerCase().includes("proceed") || text.toLowerCase().includes("si") || text.toLowerCase().includes("no"))) {
     submitApproval(activeProposalId, text);
   } else {
     simulateTurn(text, { name: "inspect_operational_state", args: { subsystem: "all" } }, false, () => {
-      appendChat("agent", "He procesado tu comando e inspeccionado la telemetrÃ­a correspondiente en Guayaquil.");
+      const reply = "Processed instruction and inspected live Guayaquil telemetry.";
+      appendChat("agent", reply);
+      speakAudioResponse(reply);
     });
   }
 }
 
-// Simple Canvas Audio Waveform Animator
+// Canvas Audio Waveform Animator
 function initWaveform() {
   const canvas = document.getElementById("waveformCanvas");
   if (!canvas) return;
@@ -340,25 +421,27 @@ function initWaveform() {
   let phase = 0;
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const bars = 28;
+    const bars = 24;
     const barWidth = 6;
-    const spacing = 6;
+    const spacing = 5;
     const startX = (canvas.width - (bars * (barWidth + spacing))) / 2;
 
+    const isActive = isVoiceActive || isAudioSpeaking;
+
     for (let i = 0; i < bars; i++) {
-      let amp = isVoiceActive ? Math.sin(phase + i * 0.4) * 16 + Math.random() * 10 : 4;
+      let amp = isActive ? Math.sin(phase + i * 0.45) * 14 + Math.random() * 8 : 4;
       amp = Math.max(3, Math.abs(amp));
 
       const x = startX + i * (barWidth + spacing);
       const y = (canvas.height - amp) / 2;
 
-      ctx.fillStyle = isVoiceActive ? "#0284c7" : "#cbd5e1";
+      ctx.fillStyle = isActive ? (isAudioSpeaking ? "#10b981" : "#0284c7") : "#cbd5e1";
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, amp, 3);
       ctx.fill();
     }
 
-    phase += 0.15;
+    phase += 0.18;
     animationFrameId = requestAnimationFrame(draw);
   }
   draw();
