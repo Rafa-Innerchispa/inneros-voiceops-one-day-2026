@@ -19,17 +19,24 @@ const fallbackVoiceAgentConfig = {
   }
 };
 
+// InnerOS VoiceOps — Real Boson AI Higgs Realtime Speech-to-Speech Engine
 let activeProposalId = null;
 let currentHtrTotal = 18.4;
 let isVoiceActive = false;
 let isAudioSpeaking = false;
 let animationFrameId = null;
 
-let selectedVoice = null;
+let higgsWebSocket = null;
+let ephemeralToken = null;
+let activeAudioSources = [];
+let audioContext = null;
+let micStream = null;
+let analyserNode = null;
+let micDataArray = null;
+let scriptProcessorNode = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   initWaveform();
-  initVoices();
   const htrEl = document.getElementById("htrCounter");
   if (htrEl) htrEl.textContent = `+${currentHtrTotal.toFixed(1)}`;
   fetchTelemetry();
@@ -42,11 +49,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("refreshTelemetryBtn")?.addEventListener("click", fetchTelemetry);
   document.getElementById("liveMicBtn")?.addEventListener("click", startLiveVoice);
   document.getElementById("stopMicBtn")?.addEventListener("click", stopLiveVoice);
-  document.getElementById("voiceSelect")?.addEventListener("change", (e) => {
-    const voices = window.speechSynthesis.getVoices();
-    selectedVoice = voices.find((v) => v.name === e.target.value) || null;
-  });
-
   document.getElementById("sendManualBtn")?.addEventListener("click", sendManualUtterance);
   document.getElementById("manualInput")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendManualUtterance();
@@ -73,153 +75,403 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// Helper to find the best male English voice
-function getBestMaleVoice() {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices || !voices.length) return null;
-
-  const femaleKeywords = [
-    "zira", "jenny", "aria", "sonia", "helena", "sabina", "laura", "mia", 
-    "cortana", "eva", "susan", "female", "woman", "catherine", "linda", 
-    "heather", "samantha", "karen", "victoria", "hazel", "ayumi", "haruka", 
-    "yuri", "steffi", "katja", "alice", "juliette", "luciana", "monica", 
-    "paulina", "google us english", "google español", "google uk english female"
-  ];
-  const maleKeywords = [
-    "david", "guy", "mark", "george", "ryan", "christopher", "daniel", 
-    "male", "man", "natural", "uk english male", "richard", "james", "john", "paul", "tom", "stephen"
-  ];
-
-  // 1. Explicit Male English
-  const maleEn = voices.find((v) => {
-    const n = v.name.toLowerCase();
-    const isEn = v.lang.toLowerCase().startsWith("en");
-    return isEn && maleKeywords.some((k) => n.includes(k)) && !femaleKeywords.some((k) => n.includes(k));
-  });
-  if (maleEn) return maleEn;
-
-  // 2. Any voice that explicitly mentions male
-  const anyMale = voices.find((v) => {
-    const n = v.name.toLowerCase();
-    return maleKeywords.some((k) => n.includes(k)) && !femaleKeywords.some((k) => n.includes(k));
-  });
-  if (anyMale) return anyMale;
-
-  // 3. Any English voice that is NOT on the female list
-  const notFemaleEn = voices.find((v) => {
-    const n = v.name.toLowerCase();
-    const isEn = v.lang.toLowerCase().startsWith("en");
-    return isEn && !femaleKeywords.some((k) => n.includes(k));
-  });
-  if (notFemaleEn) return notFemaleEn;
-
-  return voices[0];
-}
-
-// Initialize & Filter for Premium Male English Voices
-function initVoices() {
-  if (!("speechSynthesis" in window)) return;
-
-  function populate() {
-    const voices = window.speechSynthesis.getVoices();
-    const select = document.getElementById("voiceSelect");
-    if (!select || !voices.length) return;
-
-    select.innerHTML = "";
-    
-    const femaleKeywords = [
-      "zira", "jenny", "aria", "sonia", "helena", "sabina", "laura", "mia", 
-      "cortana", "eva", "susan", "female", "woman", "catherine", "linda", 
-      "heather", "samantha", "karen", "victoria", "hazel", "google us english"
-    ];
-
-    // Prioritize male English voices
-    const maleVoices = voices.filter((v) => {
-      const n = v.name.toLowerCase();
-      const isEn = v.lang.toLowerCase().startsWith("en");
-      return isEn && (n.includes("david") || n.includes("guy") || n.includes("mark") || n.includes("ryan") || n.includes("george") || n.includes("male")) && !femaleKeywords.some(k => n.includes(k));
-    });
-    const otherVoices = voices.filter((v) => !maleVoices.includes(v) && !femaleKeywords.some(k => v.name.toLowerCase().includes(k)));
-
-    const sorted = [...maleVoices, ...otherVoices];
-
-    sorted.forEach((voice) => {
-      const opt = document.createElement("option");
-      opt.value = voice.name;
-      const isMale = maleVoices.includes(voice);
-      opt.textContent = `${voice.name} (${voice.lang})${isMale ? " ★ Deep Male Voice" : ""}`;
-      select.appendChild(opt);
-    });
-
-    const preferred = getBestMaleVoice();
-    if (preferred) {
-      select.value = preferred.name;
-      selectedVoice = preferred;
-    }
-  }
-
-  populate();
-  window.speechSynthesis.onvoiceschanged = populate;
-}
-
-// Trigger Instant Barge-In (<50ms)
-function triggerInstantBargeIn() {
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.pause();
-    window.speechSynthesis.cancel();
-  }
-  isAudioSpeaking = false;
-  document.getElementById("audioPlayingTag")?.classList.add("hidden");
-  if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
-  
-  setExecutionStep("Barge-In (<50ms)", "Agent speech interrupted immediately upon human voice detection!");
-  console.log("⚡ [Barge-In Triggered]: Agent audio cut off immediately.");
-}
-
-// Real Speech Audio Output Engine (Browser TTS / Web Audio playback)
-function speakAudioResponse(text, isSpanish = false) {
-  if (!("speechSynthesis" in window)) return;
-
-  window.speechSynthesis.cancel(); // Cancel prior speech for instant turn-taking
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;   // Natural cadence
-  utterance.pitch = 0.75; // Deep masculine tone
-
-  // Always re-query available voices to ensure male selection
-  const voice = selectedVoice || getBestMaleVoice();
-  if (voice) {
-    utterance.voice = voice;
-  }
-
-  utterance.onstart = () => {
-    isAudioSpeaking = true;
-    document.getElementById("audioPlayingTag")?.classList.remove("hidden");
-    document.getElementById("voiceOrb")?.classList.add("active");
-  };
-
-  utterance.onend = () => {
-    isAudioSpeaking = false;
-    document.getElementById("audioPlayingTag")?.classList.add("hidden");
-    if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
-  };
-
-  utterance.onerror = () => {
-    isAudioSpeaking = false;
-    document.getElementById("audioPlayingTag")?.classList.add("hidden");
-    if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
-  };
-
-  window.speechSynthesis.speak(utterance);
-}
-
 // Update Active Execution Step Ticker
 function setExecutionStep(label, detail) {
   const stepLabel = document.getElementById("activeStepLabel");
   const stepDetail = document.getElementById("activeStepDetail");
   if (stepLabel) stepLabel.textContent = label;
   if (stepDetail) stepDetail.textContent = detail;
+}
+
+// Fetch ephemeral token & initialize WebSocket connection for Higgs Realtime S2S
+async function initBosonSession() {
+  try {
+    const res = await fetch("/api/boson/token");
+    if (!res.ok) throw new Error("Could not mint ephemeral token");
+    const data = await res.json();
+    ephemeralToken = data.token;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}${data.ws_url || "/ws/higgs"}`;
+
+    higgsWebSocket = new WebSocket(wsUrl);
+
+    higgsWebSocket.onopen = () => {
+      console.log("⚡ Higgs Realtime WebSocket connected:", wsUrl);
+      setExecutionStep("Higgs WebSocket Live", "Stream active · Sub-50ms Barge-in enabled");
+    };
+
+    higgsWebSocket.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleHiggsServerEvent(msg);
+      } catch (err) {
+        console.warn("WS message parse error:", err);
+      }
+    };
+
+    higgsWebSocket.onerror = (err) => {
+      console.warn("Higgs WebSocket notice:", err);
+    };
+
+    higgsWebSocket.onclose = () => {
+      console.log("Higgs WebSocket connection closed");
+    };
+  } catch (err) {
+    console.warn("Ephemeral token negotiation notice:", err);
+  }
+}
+
+// Handle incoming server events from Higgs Realtime S2S stream
+function handleHiggsServerEvent(event) {
+  const type = event.type || "";
+
+  if (type === "session.created") {
+    console.log("Higgs Session active:", event.session?.id);
+    document.getElementById("turnStatus").textContent = "Higgs Realtime Streaming";
+    document.getElementById("turnStatus").className = "status-badge active";
+  } else if (type === "response.audio_transcript.delta") {
+    const text = event.delta || "";
+    if (text) {
+      appendChat("agent", text);
+      setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
+    }
+    if (event.tool_records && event.tool_records.length > 0) {
+      event.tool_records.forEach((rec) => {
+        recordToolCall(rec.tool_name, rec.arguments, rec.output, 24);
+      });
+    }
+    if (event.proposal) {
+      activeProposalId = event.proposal.proposal_id;
+      showProposalCard(activeProposalId, event.proposal.summary, event.subsystem);
+    }
+    if (event.approval_result) {
+      handleApprovalExecution(event.approval_result);
+    }
+    if (event.subsystem) {
+      highlightDashboardCard(event.subsystem);
+    }
+  } else if (type === "response.audio.delta") {
+    // Real PCM16 binary audio streaming to Web Audio API buffer queue
+    const base64Audio = event.delta || "";
+    if (base64Audio) {
+      playPCM16AudioChunk(base64Audio);
+    }
+  } else if (type === "input_audio_buffer.speech_started") {
+    cancelAllAudioPlayback();
+  }
+}
+
+// Web Audio API: Play PCM16 Mono 16kHz audio chunk through hardware destination
+function playPCM16AudioChunk(base64Data) {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  try {
+    const binary = atob(base64Data);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const int16Array = new Int16Array(bytes.buffer);
+    const float32Array = new Float32Array(int16Array.length);
+    for (let i = 0; i < int16Array.length; i++) {
+      float32Array[i] = int16Array[i] / 32768.0;
+    }
+
+    const audioBuffer = audioContext.createBuffer(1, float32Array.length, 16000);
+    audioBuffer.getChannelData(0).set(float32Array);
+
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+
+    isAudioSpeaking = true;
+    document.getElementById("audioPlayingTag")?.classList.remove("hidden");
+    document.getElementById("voiceOrb")?.classList.add("active");
+
+    source.onended = () => {
+      activeAudioSources = activeAudioSources.filter((s) => s !== source);
+      if (activeAudioSources.length === 0) {
+        isAudioSpeaking = false;
+        document.getElementById("audioPlayingTag")?.classList.add("hidden");
+        if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+      }
+    };
+
+    activeAudioSources.push(source);
+    source.start();
+  } catch (err) {
+    console.error("PCM16 playback error:", err);
+  }
+}
+
+// Cancel All Active Web Audio Playback (<50ms hardware stop)
+function cancelAllAudioPlayback() {
+  activeAudioSources.forEach((src) => {
+    try {
+      src.stop();
+    } catch (e) {}
+  });
+  activeAudioSources = [];
+  isAudioSpeaking = false;
+  document.getElementById("audioPlayingTag")?.classList.add("hidden");
+  if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+}
+
+// Trigger Instant Barge-In (<50ms)
+function triggerInstantBargeIn() {
+  cancelAllAudioPlayback();
+
+  if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
+    higgsWebSocket.send(
+      JSON.stringify({
+        type: "input_audio_buffer.speech_started",
+        timestamp: Date.now(),
+      })
+    );
+  }
+
+  setExecutionStep("Barge-In (<50ms)", "Higgs audio stream cut off immediately upon voice detection!");
+  console.log("⚡ [Barge-In Triggered]: Realtime audio cut off in <50ms.");
+}
+
+// Start Live Voice Session with real Microphone & Audio Pipeline
+async function startLiveVoice() {
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioContext.createMediaStreamSource(micStream);
+    analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize = 64;
+    source.connect(analyserNode);
+    micDataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+    // Stream raw PCM16 microphone samples to WebSocket
+    scriptProcessorNode = audioContext.createScriptProcessor(4096, 1, 1);
+    source.connect(scriptProcessorNode);
+    scriptProcessorNode.connect(audioContext.destination);
+
+    scriptProcessorNode.onaudioprocess = (e) => {
+      if (!isVoiceActive) return;
+      const inputData = e.inputBuffer.getChannelData(0);
+      let sum = 0;
+      const pcm16 = new Int16Array(inputData.length);
+      for (let i = 0; i < inputData.length; i++) {
+        const s = Math.max(-1, Math.min(1, inputData[i]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        sum += Math.abs(inputData[i]);
+      }
+      const avg = sum / inputData.length;
+
+      // Realtime Hardware VAD: If user speaks while agent audio is streaming, interrupt immediately!
+      if (avg > 0.05 && isAudioSpeaking) {
+        triggerInstantBargeIn();
+      }
+
+      if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
+        // Send base64 audio frame
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = "";
+        for (let j = 0; j < bytes.byteLength; j++) {
+          binary += String.fromCharCode(bytes[j]);
+        }
+        const b64 = btoa(binary);
+        higgsWebSocket.send(
+          JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: b64,
+          })
+        );
+      }
+    };
+
+    isVoiceActive = true;
+    document.getElementById("liveMicBtn").disabled = true;
+    document.getElementById("stopMicBtn").disabled = false;
+    document.getElementById("voiceOrb").className = "voice-orb active";
+    document.getElementById("agentStateTitle").textContent = "Higgs Realtime Listening...";
+    document.getElementById("agentStateSubtitle").textContent = "PCM16 Audio Streaming · Web Audio Buffer & Sub-50ms Barge-in Active";
+    document.getElementById("turnStatus").textContent = "Streaming Live Audio";
+    document.getElementById("turnStatus").className = "status-badge active";
+
+    setExecutionStep("Microphone Live", "Listening to your voice. Speak any operational command or query...");
+    appendChat("system", "Microphone PCM16 stream connected to Boson AI Higgs Realtime. Speak freely.");
+
+    // Connect WebSocket
+    await initBosonSession();
+
+    // Spoken greeting through Web Audio
+    processSpokenCommand("Hola");
+  } catch (err) {
+    console.error("Microphone access error:", err);
+    alert("Microphone permission was not granted. Please allow microphone access in your browser to test live speech.");
+    stopLiveVoice();
+  }
+}
+
+// Stop Live Voice Session
+function stopLiveVoice() {
+  isVoiceActive = false;
+  cancelAllAudioPlayback();
+
+  if (scriptProcessorNode) {
+    try {
+      scriptProcessorNode.disconnect();
+    } catch (e) {}
+    scriptProcessorNode = null;
+  }
+
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+
+  if (higgsWebSocket) {
+    try {
+      higgsWebSocket.close();
+    } catch (e) {}
+    higgsWebSocket = null;
+  }
+
+  document.getElementById("liveMicBtn").disabled = false;
+  document.getElementById("stopMicBtn").disabled = true;
+  document.getElementById("voiceOrb").className = "voice-orb idle";
+  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Voice Dispatcher";
+  document.getElementById("agentStateSubtitle").textContent = "Continuous Speech-to-Speech with <=125ms Barge-in & Mid-Conversation Tool Calling";
+  document.getElementById("turnStatus").textContent = "Standby / Ready";
+  document.getElementById("turnStatus").className = "status-badge";
+
+  setExecutionStep("System Ready", "Awaiting voice or simulated judge scenario.");
+  appendChat("system", "Live voice session closed.");
+}
+
+// Process spoken/typed command through Boson AI reasoning engine
+async function processSpokenCommand(text) {
+  if (isAudioSpeaking) {
+    triggerInstantBargeIn();
+  }
+
+  setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
+
+  // If WebSocket is open, send via WebSocket
+  if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
+    higgsWebSocket.send(
+      JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: text }],
+        },
+        active_proposal_id: activeProposalId,
+      })
+    );
+    return;
+  }
+
+  // Fallback to HTTP endpoint
+  try {
+    const t0 = performance.now();
+    const res = await fetch("/api/boson/converse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ utterance: text, active_proposal_id: activeProposalId }),
+    });
+    const data = await res.json();
+    const latMs = Math.round(performance.now() - t0);
+
+    if (data.tool_records && data.tool_records.length > 0) {
+      data.tool_records.forEach((rec) => {
+        recordToolCall(rec.tool_name, rec.arguments, rec.output, latMs);
+      });
+    }
+
+    if (data.proposal) {
+      activeProposalId = data.proposal.proposal_id;
+      showProposalCard(activeProposalId, data.proposal.summary, data.subsystem);
+    }
+
+    if (data.approval_result) {
+      handleApprovalExecution(data.approval_result);
+    }
+
+    const reply = data.reply || "Operational query processed.";
+    appendChat("agent", reply);
+    setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
+
+    if (data.subsystem) {
+      highlightDashboardCard(data.subsystem);
+    }
+  } catch (err) {
+    console.error("Converse error:", err);
+  }
+}
+
+// Handle approval execution UI update
+function handleApprovalExecution(app) {
+  if (app.status === "EXECUTED") {
+    document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
+    document.getElementById("approvalBadge").className = "status-badge active";
+    document.getElementById("auditPermitId").textContent = app.permit_id;
+    document.getElementById("auditActionId").textContent = app.action_id;
+    document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
+    document.getElementById("evidenceHash").textContent = app.evidence_sha256;
+
+    const savedMin = Math.round((app.htr_seconds_returned / 60) * 10) / 10;
+    currentHtrTotal += savedMin;
+    document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
+
+    document.getElementById("proposalCard").innerHTML = `
+      <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
+      <p style="margin-top:4px;">Single-Use Permit: <code>${app.permit_id}</code> · HTR: +${savedMin} min</p>
+    `;
+    document.getElementById("manualApprovalActions").style.display = "none";
+    activeProposalId = null;
+    fetchTelemetry();
+  } else {
+    document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
+    document.getElementById("approvalBadge").className = "status-badge pending";
+    document.getElementById("proposalCard").innerHTML = `
+      <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
+      <p style="margin-top:4px;">Reason: <code>${app.reason}</code> (Fail-Closed Safety Protection)</p>
+    `;
+  }
+}
+
+// Register Zoiper Extension dynamically
+async function registerZoiperExt(ext = "104") {
+  try {
+    const res = await fetch("/api/telephony/register-extension", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extension: ext, label: "Zoiper SIP Softphone (Mobile Lead)" }),
+    });
+    const data = await res.json();
+    appendChat("system", `[PBX AMI]: Extension ${ext} registered successfully from Zoiper client.`);
+    fetchTelemetry();
+  } catch (err) {
+    console.error("Register ext error:", err);
+  }
+}
+
+// Disconnect / Unregister Zoiper Extension dynamically
+async function unregisterZoiperExt(ext = "104") {
+  try {
+    const res = await fetch("/api/telephony/unregister-extension", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extension: ext }),
+    });
+    const data = await res.json();
+    appendChat("system", `[PBX AMI]: Extension ${ext} disconnected/unregistered.`);
+    fetchTelemetry();
+  } catch (err) {
+    console.error("Unregister ext error:", err);
+  }
 }
 
 // Fetch live telemetry from Guayaquil Node
@@ -229,20 +481,12 @@ async function fetchTelemetry() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // Update live sync time
     const syncTime = document.getElementById("telemetrySyncTime");
     if (syncTime) {
       const now = new Date();
       syncTime.textContent = `Streaming GYE Node-01 · ${now.toLocaleTimeString()} · 18ms`;
     }
 
-    // Update alert banner
-    const alertMsg = document.getElementById("alertMessage");
-    if (alertMsg && data.active_alerts) {
-      alertMsg.innerHTML = `<strong>[GUAYAQUIL ACTIVE ALERT]:</strong> ${data.active_alerts.join(" · ")}`;
-    }
-
-    // Helper to update truth badge
     function updateTruthBadge(elementId, truth) {
       const el = document.getElementById(elementId);
       if (!el) return;
@@ -257,13 +501,11 @@ async function fetchTelemetry() {
         const sol = sub.solar_power;
         updateTruthBadge("solTruth", sol.truth);
         const solGen = document.getElementById("solGen");
-        if (solGen) solGen.textContent = `${sol.solar_generation_watts?.toLocaleString() || 3840} W`;
+        if (solGen) solGen.textContent = `${sol.solar_generation_watts?.toLocaleString() || 529} W`;
         const solBat = document.getElementById("solBat");
-        if (solBat) solBat.textContent = `${sol.battery_charge_pct || 94}% (${sol.battery_voltage_volts || 52.4}V)`;
+        if (solBat) solBat.textContent = `${sol.battery_charge_pct || 100}% (${sol.battery_voltage_volts || 52.4}V)`;
         const solGrid = document.getElementById("solGrid");
-        if (solGrid) solGrid.textContent = sol.grid_synchronization?.replace("CONNECTED (", "").replace(")", "") || "110V / 60Hz GYE";
-        const solProv = document.getElementById("solProvider");
-        if (solProv) solProv.textContent = `Source: ${sol.source_provider || "Growatt Hybrid SPF 5000 ES"}`;
+        if (solGrid) solGrid.textContent = sol.grid_synchronization?.replace("CONNECTED (", "").replace(")", "") || "120.6V / 60Hz Guayaquil Grid";
       }
 
       // 2. Telephony Subsystem
@@ -271,47 +513,34 @@ async function fetchTelemetry() {
         const tel = sub.telephony;
         updateTruthBadge("telTruth", tel.truth);
         const telExts = document.getElementById("telExts");
-        const extsList = (tel.registered_extensions || []).map(e => e.ext).join(", ");
+        const extsList = (tel.registered_extensions || []).map((e) => e.ext).join(", ");
         if (telExts) telExts.textContent = `${tel.registered_extensions?.length || 0} Registered (${extsList || "None"})`;
         const telQuality = document.getElementById("telQuality");
         if (telQuality && tel.trunk_quality) {
           telQuality.textContent = `Jitter ${tel.trunk_quality.jitter_ms}ms (MOS ${tel.trunk_quality.mos_score})`;
         }
-        const telProv = document.getElementById("telProvider");
-        if (telProv) telProv.textContent = `Source: ${tel.source_provider || "Grandstream AMI TCP 7777"}`;
       }
 
       // 3. Network Subsystem
       if (sub.network_wifi) {
         const net = sub.network_wifi;
         updateTruthBadge("netTruth", net.truth);
-        const netWan = document.getElementById("netWan");
-        if (netWan) netWan.textContent = net.primary_wan?.replace("1.0 Gbps Fiber (Telconet GYE) - ", "") || "1.0 Gbps (RTT 3.8ms)";
         const netLoss = document.getElementById("netLoss");
         if (netLoss && net.access_points) {
-          const yard = net.access_points.find(ap => ap.ap_id === "AP-SolarYard");
-          if (yard && yard.status?.includes("DEGRADED")) {
-            const match = yard.status.match(/\((\d+(\.\d+)?% packet loss)/);
-            netLoss.textContent = match ? match[1] : "18.0% Packet Loss";
+          const yard = net.access_points.find((ap) => ap.ap_id === "AP-SolarYard");
+          if (yard && yard.status?.includes("OPTIMAL")) {
+            netLoss.textContent = "0.0% Loss (Optimal)";
+            netLoss.className = "text-success";
+            document.getElementById("cardNetwork")?.classList.remove("alert");
+          } else if (yard && yard.status?.includes("DEGRADED")) {
+            netLoss.textContent = "18.0% Packet Loss";
+            netLoss.className = "text-danger";
+            document.getElementById("cardNetwork")?.classList.add("alert");
           }
         }
-        const netSwitch = document.getElementById("netSwitch");
-        if (netSwitch) {
-          netSwitch.textContent = "UniFi Gateway Ultra (Online)";
-        }
-        const netProv = document.getElementById("netProvider");
-        if (netProv) netProv.textContent = `Source: ${net.source_provider || "UniFi Dream Machine & Cloud Gateway Ultra"}`;
       }
 
-      // 4. DMX Subsystem
-      if (sub.dmx_lighting) {
-        const dmx = sub.dmx_lighting;
-        updateTruthBadge("dmxTruth", dmx.truth);
-        const dmxProv = document.getElementById("dmxProvider");
-        if (dmxProv) dmxProv.textContent = `Source: ${dmx.source_provider || "Art-Net Universe 1 Bridge"}`;
-      }
-
-      // 5. Security Alarm Subsystem
+      // 4. Security Alarm Subsystem
       if (sub.security_alarm) {
         const alm = sub.security_alarm;
         updateTruthBadge("alarmTruth", alm.truth);
@@ -319,26 +548,16 @@ async function fetchTelemetry() {
         if (almStatus) almStatus.textContent = alm.status === "DISARMED_OPTIMAL" ? "DISARMED" : alm.status;
         const almZones = document.getElementById("alarmZones");
         if (almZones) almZones.textContent = `${alm.monitored_zones_count || 10} Zones Monitored`;
-        const almTrigger = document.getElementById("alarmTrigger");
-        if (almTrigger) almTrigger.textContent = alm.is_in_alarm ? "BREACH DETECTED" : "NORMAL (No Breach)";
-        const almProv = document.getElementById("alarmProvider");
-        if (almProv) almProv.textContent = `Source: ${alm.source_provider || "Intelbras Guardian / HA API"}`;
       }
 
-      // 6. Video Surveillance Subsystem
+      // 5. Video Surveillance Subsystem
       if (sub.video_surveillance) {
         const cam = sub.video_surveillance;
         updateTruthBadge("camTruth", cam.truth);
-        const camStatus = document.getElementById("camStatus");
-        if (camStatus) camStatus.textContent = cam.status === "LIVE_MONITORING" ? "ACTIVE" : cam.status;
         const camChannels = document.getElementById("camChannels");
         if (camChannels && cam.channels) {
-          camChannels.textContent = cam.channels.map(c => `${c.channel} ${c.alias}`).join(" · ");
+          camChannels.textContent = cam.channels.map((c) => `${c.channel} ${c.alias}`).join(" · ");
         }
-        const camMotion = document.getElementById("camMotion");
-        if (camMotion) camMotion.textContent = "VideoMotion Stream Online";
-        const camProv = document.getElementById("camProvider");
-        if (camProv) camProv.textContent = `Source: ${cam.source_provider || "Physical Guardian / Dahua"}`;
       }
     }
   } catch (err) {
@@ -358,370 +577,54 @@ async function fetchBosonStatus() {
   }
 }
 
-let audioContext = null;
-let micStream = null;
-let analyserNode = null;
-let speechRecognizer = null;
-let micDataArray = null;
-
-// Start Live Voice Session with real Microphone & Audio Pipeline
-async function startLiveVoice() {
-  try {
-    // 1. Request real microphone access and connect AnalyserNode for live Waveform
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaStreamSource(micStream);
-    analyserNode = audioContext.createAnalyser();
-    analyserNode.fftSize = 64;
-    source.connect(analyserNode);
-    micDataArray = new Uint8Array(analyserNode.frequencyBinCount);
-
-    isVoiceActive = true;
-    document.getElementById("liveMicBtn").disabled = true;
-    document.getElementById("stopMicBtn").disabled = false;
-    document.getElementById("voiceOrb").className = "voice-orb active";
-    document.getElementById("agentStateTitle").textContent = "Higgs Realtime Listening...";
-    document.getElementById("agentStateSubtitle").textContent = "Microphone streaming PCM16 · Live VAD & Instant Barge-in Active";
-    document.getElementById("turnStatus").textContent = "Streaming Live Audio";
-    document.getElementById("turnStatus").className = "status-badge active";
-
-    setExecutionStep("Microphone Live", "Listening to your voice. Speak any operational command or query...");
-    appendChat("system", "Microphone stream connected. Speak freely (English, Spanish or Spanglish).");
-
-    // 2. Play initial voice greeting through speakers
-    appendChat("agent", "Hi, I'm here to help you.");
-    speakAudioResponse("Hi, I'm here to help you.");
-
-    // 3. Initialize Speech Recognition if supported
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      speechRecognizer = new SpeechRecognition();
-      speechRecognizer.continuous = true;
-      speechRecognizer.interimResults = true;
-      speechRecognizer.lang = "es-EC"; // Supports both Spanish and English technical terms
-
-      speechRecognizer.onstart = () => {
-        console.log("Speech recognition service active");
-      };
-
-      speechRecognizer.onaudiostart = () => {
-        if (isAudioSpeaking) {
-          triggerInstantBargeIn();
-        }
-      };
-
-      speechRecognizer.onsoundstart = () => {
-        if (isAudioSpeaking) {
-          triggerInstantBargeIn();
-        }
-      };
-
-      speechRecognizer.onspeechstart = () => {
-        // Instant Barge-In: Cancel agent speech immediately when user starts speaking
-        if (isAudioSpeaking) {
-          triggerInstantBargeIn();
-        }
-      };
-
-      speechRecognizer.onresult = (event) => {
-        // Double guarantee: if any speech result arrives while speaking, cancel audio
-        if (isAudioSpeaking) {
-          triggerInstantBargeIn();
-        }
-
-        let interimTranscript = "";
-        let finalTranscript = "";
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-
-        if (interimTranscript) {
-          setExecutionStep("Hearing Speech", `"${interimTranscript.trim()}"`);
-        }
-
-        if (finalTranscript) {
-          const userText = finalTranscript.trim();
-          console.log("User spoken utterance:", userText);
-          appendChat("user", userText);
-          processSpokenCommand(userText);
-        }
-      };
-
-      speechRecognizer.onerror = (event) => {
-        console.warn("Speech recognition notice:", event.error);
-        if (event.error !== "no-speech") {
-          setExecutionStep("Audio Stream Active", "Microphone audio streaming to Higgs Realtime.");
-        }
-      };
-
-      speechRecognizer.onend = () => {
-        if (isVoiceActive && speechRecognizer) {
-          try {
-            speechRecognizer.start(); // Keep listening while active
-          } catch (e) {
-            // Already restarted
-          }
-        }
-      };
-
-      speechRecognizer.start();
-    } else {
-      appendChat("system", "Note: Web Speech API recognition not available in this browser; audio level streaming and synthetic scenarios active.");
-    }
-  } catch (err) {
-    console.error("Microphone access error:", err);
-    alert("Microphone permission was not granted. Please allow microphone access in your browser to test live speech.");
-    stopLiveVoice();
-  }
-}
-
-// Highlight the queried subsystem card on the dashboard
-function highlightDashboardCard(subsystem) {
-  const cardMap = {
-    "solar_power": "cardSolar",
-    "telephony_sip": "cardTelephony",
-    "network_wifi": "cardNetwork",
-    "dmx_lighting": "cardDmx",
-    "servers_rack": "cardNetwork",
-    "security_alarm": "cardAlarm",
-    "video_surveillance": "cardCameras",
-  };
-  const cardId = cardMap[subsystem];
-  if (cardId) {
-    const el = document.getElementById(cardId);
-    if (el) {
-      el.classList.add("highlighted");
-      setTimeout(() => el.classList.remove("highlighted"), 4000);
-    }
-  }
-}
-
-// Process spoken command from live microphone through dynamic Boson AI reasoning engine
-async function processSpokenCommand(text) {
-  if (isAudioSpeaking) {
-    triggerInstantBargeIn();
-  }
-  setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
-  try {
-    const t0 = performance.now();
-    const res = await fetch("/api/boson/converse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ utterance: text, active_proposal_id: activeProposalId }),
-    });
-    const data = await res.json();
-    const latMs = Math.round(performance.now() - t0);
-
-    // 1. Record tool calls in ticker
-    if (data.tool_records && data.tool_records.length > 0) {
-      data.tool_records.forEach((rec) => {
-        recordToolCall(rec.tool_name, rec.arguments, rec.output, latMs);
-      });
-    }
-
-    // 2. Handle proposal
-    if (data.proposal) {
-      activeProposalId = data.proposal.proposal_id;
-      showProposalCard(activeProposalId, data.proposal.summary, data.subsystem);
-    }
-
-    // 3. Handle approval result
-    if (data.approval_result) {
-      const app = data.approval_result;
-      if (app.status === "EXECUTED") {
-        document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
-        document.getElementById("approvalBadge").className = "status-badge active";
-        document.getElementById("auditPermitId").textContent = app.permit_id;
-        document.getElementById("auditActionId").textContent = app.action_id;
-        document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
-        document.getElementById("evidenceHash").textContent = app.evidence_sha256;
-
-        const savedMin = Math.round((app.htr_seconds_returned / 60) * 10) / 10;
-        currentHtrTotal += savedMin;
-        document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
-
-        document.getElementById("proposalCard").innerHTML = `
-          <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
-          <p style="margin-top:4px;">Single-Use Permit: <code>${app.permit_id}</code> · HTR: +${savedMin} min</p>
-        `;
-        document.getElementById("manualApprovalActions").style.display = "none";
-        activeProposalId = null;
-      } else {
-        document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
-        document.getElementById("approvalBadge").className = "status-badge pending";
-        document.getElementById("proposalCard").innerHTML = `
-          <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
-          <p style="margin-top:4px;">Reason: <code>${app.reason}</code> (Fail-Closed Safety Protection)</p>
-        `;
-      }
-    }
-
-    // 4. Speak and display response
-    const reply = data.reply || "Operational query processed.";
-    appendChat("agent", reply);
-    setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-    speakAudioResponse(reply);
-
-    // 5. Highlight card
-    if (data.subsystem) {
-      highlightDashboardCard(data.subsystem);
-    }
-  } catch (err) {
-    console.error("Converse error:", err);
-    const fallbackReply = "Telemetry inspection connected to Guayaquil. Infrastructure systems are active.";
-    appendChat("agent", fallbackReply);
-    speakAudioResponse(fallbackReply);
-  }
-}
-
-// Stop Live Voice Session
-function stopLiveVoice() {
-  isVoiceActive = false;
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-
-  if (speechRecognizer) {
-    try { speechRecognizer.stop(); } catch (e) {}
-    speechRecognizer = null;
-  }
-
-  if (micStream) {
-    micStream.getTracks().forEach((track) => track.stop());
-    micStream = null;
-  }
-
-  if (audioContext) {
-    try { audioContext.close(); } catch (e) {}
-    audioContext = null;
-  }
-
-  document.getElementById("liveMicBtn").disabled = false;
-  document.getElementById("stopMicBtn").disabled = true;
-  document.getElementById("voiceOrb").className = "voice-orb idle";
-  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Voice Dispatcher";
-  document.getElementById("agentStateSubtitle").textContent = "Continuous Speech-to-Speech with <=125ms Barge-in & Mid-Conversation Tool Calling";
-  document.getElementById("turnStatus").textContent = "Standby / Ready";
-  document.getElementById("turnStatus").className = "status-badge";
-
-  setExecutionStep("System Ready", "Awaiting voice or simulated judge scenario.");
-  appendChat("system", "Live voice session closed.");
-}
-
 // Trigger Scenario Demonstrations
 async function triggerScenario(type) {
   if (type === "inspect") {
     setExecutionStep("1. Querying Telemetry", "Calling 'inspect_operational_state' on Guayaquil infrastructure...");
     appendChat("user", "Higgs, run a full site diagnostics across all Guayaquil systems.");
-
-    simulateTurn("Higgs, run a full site diagnostics across all Guayaquil systems", {
-      name: "inspect_operational_state",
-      args: { subsystem: "all" }
-    }, false, () => {
-      const responseText = "Diagnostics complete. Solar inverter generation is at 3,840 watts and battery is 94%. Grandstream PBX has 4 extensions online. An active alert is detected on AP-SolarYard with 18% packet loss.";
-      appendChat("agent", responseText);
-      setExecutionStep("Telemetry Streamed", "Higgs speaking diagnostic report without conversational pause.");
-      speakAudioResponse(responseText);
-    });
-  }
-  else if (type === "barge_in") {
-    setExecutionStep("2. Long Speech In-Progress", "Higgs speaking system parameters; testing human interruption...");
-    const longReport = "Executing full operational stream: Node Guayaquil running grid sync at 224 volts, frequency 60 hertz, phase A drawing 12.1 amps, battery storage optimal at 52.4 volts...";
+    processSpokenCommand("Higgs, run a full site diagnostics across all Guayaquil systems");
+  } else if (type === "barge_in") {
+    setExecutionStep("2. Long Speech In-Progress", "Higgs streaming audio parameters; testing human voice interruption...");
+    const longReport = "Executing full operational stream: Node Guayaquil running grid sync at 120.6 volts, frequency 60 hertz, phase A drawing 6.11 amps, battery storage optimal at 52.4 volts...";
     appendChat("agent", longReport);
-    speakAudioResponse(longReport);
 
     setTimeout(() => {
-      // Instant Interruption triggered by human
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel(); // Immediate voice cutoff
-      setExecutionStep("Barge-In Detected (<125ms)", "Cancelled prior audio buffer immediately; context shifted.");
-      appendChat("user", "Hold on, stop! The switch is throwing errors on AP-SolarYard, what is the status?");
-
-      simulateTurn("Hold on stop! The switch is throwing errors on AP-SolarYard, what is the status?", {
-        name: "inspect_operational_state",
-        args: { subsystem: "network_wifi" }
-      }, true, () => {
-        const cutResponse = "Barge-in acknowledged in 82 milliseconds. Network telemetry indicates AP-SolarYard has heavy channel interference. Would you like me to propose a PoE power-cycle restart?";
-        appendChat("agent", `⚡ [Barge-in <125ms]: ${cutResponse}`);
-        speakAudioResponse(cutResponse);
-      });
-    }, 1100);
-  }
-  else if (type === "code_switch") {
+      triggerInstantBargeIn();
+      setExecutionStep("Barge-In Detected (<50ms)", "Cancelled prior audio buffer immediately; context shifted.");
+      appendChat("user", "Espera, otra cosa. The switch is throwing errors on AP-SolarYard, what is the status?");
+      processSpokenCommand("The switch is throwing errors on AP-SolarYard, what is the status?");
+    }, 1200);
+  } else if (type === "code_switch") {
     setExecutionStep("3. Technical Code-Switching", "Processing Spanglish engineering command...");
-    const spanglishUtterance = "Revisé el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.";
+    const spanglishUtterance = "Revisé el switch principal and the link is dropping packets en el solar yard, propose a restart immediately.";
     appendChat("user", spanglishUtterance);
-
-    simulateTurn(spanglishUtterance, {
-      name: "propose_governed_action",
-      args: { action_type: "restart_wifi_ap", target_subsystem: "network_wifi" }
-    }, false, (res) => {
-      activeProposalId = res.output?.proposal_id || "prop_sample_1";
-      showProposalCard(activeProposalId, "Power-cycle PoE port for AP-SolarYard", "network_wifi");
-      const codeSwitchReply = `Proposal created under ID ${activeProposalId}. Please confirm explicitly: Do you authorize executing the AP-SolarYard PoE restart?`;
-      appendChat("agent", codeSwitchReply);
-      setExecutionStep("Approval Required", "Awaiting human verbal confirmation before permit issuance.");
-      speakAudioResponse(codeSwitchReply);
-    });
-  }
-  else if (type === "approve") {
-    if (!activeProposalId) {
-      const propRes = await fetch("/api/governed/propose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action_type: "restart_wifi_ap", target_subsystem: "network_wifi" })
-      });
-      const propData = await propRes.json();
-      activeProposalId = propData.proposal_id;
-      showProposalCard(activeProposalId, propData.summary, "network_wifi");
-    }
-
+    processSpokenCommand(spanglishUtterance);
+  } else if (type === "approve") {
     setExecutionStep("4. Evaluating Verbal Approval", "Passing verbatim utterance to ExplicitApprovalGate...");
     const affirmativeSpeech = "Affirmative, authorize and execute the AP-SolarYard restart now.";
     appendChat("user", affirmativeSpeech);
-    await submitApproval(activeProposalId, affirmativeSpeech);
-  }
-  else if (type === "reject") {
-    if (!activeProposalId) {
-      const propRes = await fetch("/api/governed/propose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action_type: "isolate_solar_phase", target_subsystem: "solar_power" })
-      });
-      const propData = await propRes.json();
-      activeProposalId = propData.proposal_id;
-      showProposalCard(activeProposalId, propData.summary, "solar_power");
+    if (activeProposalId) {
+      await submitApproval(activeProposalId, affirmativeSpeech);
+    } else {
+      processSpokenCommand("reinicia el ap solaryard");
     }
-
+  } else if (type === "reject") {
     setExecutionStep("5. Evaluating Ambiguous Utterance", "Testing Fail-Closed security rejection...");
     const ambiguousSpeech = "Mmm maybe later, I am not totally sure yet.";
     appendChat("user", ambiguousSpeech);
-    await submitApproval(activeProposalId, ambiguousSpeech);
-  }
-}
-
-// Simulate Turn via API
-async function simulateTurn(utterance, toolCall, interruption, callback) {
-  try {
-    const t0 = performance.now();
-    const res = await fetch("/api/governed/simulate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ utterance, tool_call: toolCall, interruption })
-    });
-    const data = await res.json();
-    const latMs = Math.round(performance.now() - t0);
-
-    if (toolCall) {
-      const rec = data.tool_records?.[0] || {};
-      recordToolCall(toolCall.name, toolCall.args, rec.output, latMs);
+    if (activeProposalId) {
+      await submitApproval(activeProposalId, ambiguousSpeech);
+    } else {
+      processSpokenCommand(ambiguousSpeech);
     }
-
-    if (callback) callback(data.tool_records?.[0] || {});
-  } catch (err) {
-    console.error("Simulation turn error:", err);
+  } else if (type === "incident_analysis") {
+    setExecutionStep("6. Qwen Incident Reasoning", "Invoking inneros_analyze_incident for root-cause analysis...");
+    const incidentQuery = "¿Por qué crees que ocurrió la falla de ayer en la red?";
+    appendChat("user", incidentQuery);
+    processSpokenCommand(incidentQuery);
+  } else if (type === "zoiper_test") {
+    setExecutionStep("7. Zoiper Dynamic PBX Test", "Registering Zoiper Ext 104 and observing live reflection...");
+    await registerZoiperExt("104");
   }
 }
 
@@ -732,49 +635,23 @@ async function submitApproval(proposalId, utterance) {
     const res = await fetch("/api/governed/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proposal_id: proposalId, utterance: utterance })
+      body: JSON.stringify({ proposal_id: proposalId, utterance: utterance }),
     });
     const data = await res.json();
     const latMs = Math.round(performance.now() - t0);
 
     recordToolCall("submit_user_approval", { proposal_id: proposalId, utterance }, data, latMs);
+    handleApprovalExecution(data);
 
     if (data.status === "EXECUTED") {
-      document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
-      document.getElementById("approvalBadge").className = "status-badge active";
-
-      document.getElementById("auditPermitId").textContent = data.permit_id;
-      document.getElementById("auditActionId").textContent = data.action_id;
-      document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
-      document.getElementById("evidenceHash").textContent = data.evidence_sha256;
-
       const savedMin = Math.round((data.htr_seconds_returned / 60) * 10) / 10;
-      currentHtrTotal += savedMin;
-      document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
-
-      document.getElementById("proposalCard").innerHTML = `
-        <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
-        <p style="margin-top:4px;">Single-Use Permit: <code>${data.permit_id}</code> · HTR: +${savedMin} min</p>
-      `;
-      document.getElementById("manualApprovalActions").style.display = "none";
-      activeProposalId = null;
-
       const agentConfirmation = `Action executed under single-use permit ${data.permit_id}. Cryptographic receipt recorded in Audit Fabric and +${savedMin} minutes of human time returned.`;
       appendChat("agent", agentConfirmation);
       setExecutionStep("Operation Executed", `Permit ${data.permit_id} verified; evidence sealed.`);
-      speakAudioResponse(agentConfirmation);
     } else {
-      document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
-      document.getElementById("approvalBadge").className = "status-badge pending";
-
-      document.getElementById("proposalCard").innerHTML = `
-        <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
-        <p style="margin-top:4px;">Reason: <code>${data.reason}</code> (Fail-Closed Safety Protection)</p>
-      `;
-      const agentRejection = `Utterance was ambiguous or negative. Under fail-closed security policy, the action remains BLOCKED.`;
+      const agentRejection = `Utterance was ambiguous or negative ('${data.reason}'). Under fail-closed security policy, the action remains BLOCKED.`;
       appendChat("agent", agentRejection);
       setExecutionStep("Action Blocked", "Fail-closed safety gate rejected ambiguous confirmation.");
-      speakAudioResponse(agentRejection);
     }
   } catch (err) {
     console.error("Submit approval error:", err);
@@ -822,7 +699,7 @@ function appendChat(role, text) {
 
   const meta = document.createElement("span");
   meta.className = "bubble-meta";
-  meta.textContent = role === "user" ? "OPERATOR (GUAYAQUIL)" : (role === "agent" ? "HIGGS REALTIME (S2S)" : "SYSTEM");
+  meta.textContent = role === "user" ? "OPERATOR (GUAYAQUIL)" : role === "agent" ? "HIGGS REALTIME (S2S)" : "SYSTEM";
 
   const p = document.createElement("p");
   p.textContent = text;
@@ -838,7 +715,7 @@ function sendManualUtterance() {
   const input = document.getElementById("manualInput");
   const text = input.value.trim();
   if (!text) return;
-  
+
   if (isAudioSpeaking) {
     triggerInstantBargeIn();
   }
@@ -846,6 +723,28 @@ function sendManualUtterance() {
   input.value = "";
   appendChat("user", text);
   processSpokenCommand(text);
+}
+
+// Highlight the queried subsystem card on the dashboard
+function highlightDashboardCard(subsystem) {
+  const cardMap = {
+    solar_power: "cardSolar",
+    telephony: "cardTelephony",
+    network_wifi: "cardNetwork",
+    dmx_lighting: "cardDmx",
+    servers_rack: "cardNetwork",
+    security_alarm: "cardAlarm",
+    video_surveillance: "cardCameras",
+    instacloud: "cardInstaCloud",
+  };
+  const cardId = cardMap[subsystem];
+  if (cardId) {
+    const el = document.getElementById(cardId);
+    if (el) {
+      el.classList.add("highlighted");
+      setTimeout(() => el.classList.remove("highlighted"), 4000);
+    }
+  }
 }
 
 // Canvas Audio Waveform Animator (connected to real microphone AnalyserNode)
@@ -860,7 +759,7 @@ function initWaveform() {
     const bars = 24;
     const barWidth = 6;
     const spacing = 5;
-    const startX = (canvas.width - (bars * (barWidth + spacing))) / 2;
+    const startX = (canvas.width - bars * (barWidth + spacing)) / 2;
 
     const isActive = isVoiceActive || isAudioSpeaking;
 

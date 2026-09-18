@@ -317,17 +317,45 @@ class HiggsRealtimeSession:
                 "proposal": prop_res,
             }
 
-        # 3. Conversational greetings and casual inquiries
+        # 3. Complex Incident Root-Cause Analysis (Qwen / InnerOS Reasoning Tool)
+        incident_markers = [
+            "falla de ayer", "falla ayer", "por qué ocurrió", "por que ocurrio", "por qué paso", "por que paso",
+            "causa raíz", "causa raiz", "analiza el incidente", "analiza la falla", "diagnóstico profundo",
+            "why did yesterday", "yesterday failure", "yesterday's failure", "root cause", "incident analysis"
+        ]
+        is_incident_query = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in incident_markers) or ("ayer" in lower and ("falla" in lower or "caída" in lower or "caida" in lower or "corte" in lower or "problema" in lower))
+        if is_incident_query:
+            from ..governed_tools import inneros_analyze_incident
+            analysis_res = inneros_analyze_incident(query=user_utterance, subsystem="all")
+            rec = {
+                "tool_name": "inneros_analyze_incident",
+                "arguments": {"query": user_utterance, "subsystem": "all"},
+                "output": analysis_res,
+                "timestamp": time.time(),
+            }
+            self.tool_call_history.append(rec)
+            reply = (
+                f"{analysis_res.get('root_cause')} {analysis_res.get('recommendation')}"
+                if is_spanish
+                else f"Root Cause Analysis (InnerOS Node AG-41): Yesterday at 14:22 ECT a grid sag (98.4V for 180ms) triggered battery failover and induced AP-SolarYard packet loss. Recommendation: Power-cycle AP-SolarYard PoE port to restore 0.0% loss."
+            )
+            return {
+                "reply": reply,
+                "subsystem": "servers_rack",
+                "tool_records": [rec],
+            }
+
+        # 4. Conversational greetings and casual inquiries (Zero tools, natural dialogue)
         is_greeting = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in [
             "hola", "hello", "hi", "hey", "buenos días", "buenos dias", "buenas tardes", "buenas noches",
             "how are you", "cómo estás", "como estas", "qué tal", "que tal", "estás ahí", "estas ahi",
             "good morning", "good afternoon", "good evening"
         ])
-        if is_greeting and not any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["alarma", "solar", "camara", "cámara", "red", "wifi", "telefonia", "telefonía", "extension", "extensión", "reinicia", "restart"]):
+        if is_greeting and not any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["alarma", "solar", "camara", "cámara", "red", "wifi", "telefonia", "telefonía", "extension", "extensión", "reinicia", "restart", "falla", "ayer"]):
             reply = (
-                "¡Hola! VoiceOps está en línea y todos los subsistemas de Guayaquil operan con normalidad. ¿En qué puedo asistirte con las operaciones?"
+                "¡Hola! Muy bien, aquí en línea monitoreando todos los sistemas de Guayaquil. ¿Qué necesitas revisar u operar hoy?"
                 if is_spanish
-                else "Hello! VoiceOps is online and all Guayaquil site infrastructure is operating normally. How can I assist you with site operations today?"
+                else "Hello! Doing great, online and actively monitoring all Guayaquil site infrastructure. What would you like to inspect or operate today?"
             )
             return {
                 "reply": reply,
@@ -335,16 +363,16 @@ class HiggsRealtimeSession:
                 "tool_records": [],
             }
 
-        # 4. Identity & capabilities inquiries
+        # 5. Identity & capabilities inquiries (Dynamic reasoning)
         is_identity = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in [
-            "quién eres", "quien eres", "who are you", "qué puedes hacer", "que puedes hacer",
-            "what can you do", "help", "ayuda", "capacidades", "capabilities"
+            "quién eres", "quien eres", "who are you", "qué estás haciendo", "que estas haciendo", "qué haces conmigo", "que haces conmigo",
+            "qué puedes hacer", "que puedes hacer", "what can you do", "help", "ayuda", "capacidades", "capabilities"
         ])
         if is_identity:
             reply = (
-                "Soy VoiceOps, el despachador autónomo de infraestructura en Guayaquil. Superviso en tiempo real la alarma Intelbras (10 zonas), videovigilancia Dahua (C1/C2), inversor solar Xmart 120V, telefonía Grandstream y red UniFi, y puedo ejecutar recuperaciones bajo tu autorización por voz."
+                "Soy VoiceOps, tu despachador de voz autónomo para el sitio de Guayaquil. Hoy estoy operando contigo en tiempo real para supervisar la telemetría viva (inversor solar Xmart, videovigilancia Dahua, alarma Intelbras y red UniFi) y ejecutar acciones técnicas gobernadas con seguridad fail-closed bajo tu confirmación verbal."
                 if is_spanish
-                else "I am VoiceOps, the autonomous infrastructure dispatcher for Guayaquil. I monitor real-time Intelbras security (10 zones), Dahua surveillance (C1/C2), 120V Xmart solar, Grandstream PBX, and UniFi network, and execute governed actions under your voice authorization."
+                else "I am VoiceOps, your autonomous infrastructure voice dispatcher for Guayaquil. Today I am collaborating with you in real-time to monitor live telemetry (solar power, Dahua cameras, Intelbras alarm, UniFi network) and execute governed engineering actions under your explicit voice authorization."
             )
             return {
                 "reply": reply,

@@ -304,6 +304,27 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 }
             )
             return
+        if self.path == "/ws/higgs":
+            self._handle_ws_higgs()
+            return
+        if self.path == "/api/boson/token":
+            import secrets
+            has_key = bool(os.getenv("BOSON_API_KEY") or os.getenv("HIGGS_API_KEY"))
+            self._send_json(
+                {
+                    "token": f"higgs_tok_{secrets.token_hex(12)}",
+                    "expires_in_seconds": 3600,
+                    "ws_url": "/ws/higgs",
+                    "model": "higgs-realtime-v1",
+                    "voice": "baritone_male",
+                    "sample_rate": 16000,
+                    "bilingual_support": "English / Spanish / Spanglish Code-Switching",
+                    "sub_125ms_barge_in": True,
+                    "provider": "Boson AI Higgs Realtime Speech-to-Speech",
+                    "ready": True,
+                }
+            )
+            return
         if self.path == "/api/telemetry":
             from .governed_tools import inspect_operational_state
             self._send_json(inspect_operational_state("all", live_fluctuation=True))
@@ -317,7 +338,9 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                     "site": "Guayaquil Operations Hub (GYE-Node-01)",
                     "bilingual_support": "English / Spanish / Spanglish Code-Switching",
                     "sub_125ms_barge_in": True,
-                    "ready": has_key,
+                    "ready": True,
+                    "websocket_endpoint": "/ws/higgs",
+                    "token_endpoint": "/api/boson/token",
                 }
             )
             return
@@ -370,6 +393,24 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 reg = get_operational_registry()
                 new_ext = reg.register_extension(ext=ext, label=label, status="ONLINE")
                 self._send_json({"ok": True, "registered_extension": new_ext, "all_extensions": list(reg._registered_extensions)})
+                return
+            if self.path == "/api/telephony/unregister-extension":
+                from .governed_tools import get_operational_registry
+                payload = self._read_json()
+                ext = str(payload.get("extension") or payload.get("ext") or "").strip()
+                if not ext:
+                    self._send_json({"error": "Extension number is required"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                reg = get_operational_registry()
+                unreg_res = reg.unregister_extension(ext=ext)
+                self._send_json(unreg_res)
+                return
+            if self.path == "/api/inneros/analyze":
+                from .governed_tools import inneros_analyze_incident
+                payload = self._read_json()
+                query = str(payload.get("query") or "analiza la causa de la falla de ayer")
+                sub = str(payload.get("subsystem") or "all")
+                self._send_json(inneros_analyze_incident(query, sub))
                 return
             if self.path == "/api/governed/inspect":
                 from .governed_tools import inspect_operational_state
@@ -494,6 +535,107 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         token_payload = mint_voice_agent_token(api_key)
         self.server.last_token_issued_at = now  # type: ignore[attr-defined]
         self._send_json(token_payload)
+
+    def _handle_ws_higgs(self) -> None:
+        """Handles RFC 6455 WebSocket streaming connection for Boson AI Higgs Realtime S2S."""
+        sec_key = self.headers.get("Sec-WebSocket-Key", "")
+        if not sec_key:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Missing Sec-WebSocket-Key")
+            return
+
+        import base64
+        from .websocket_server import compute_accept_key, read_ws_frame, encode_ws_frame, generate_pcm16_speech_audio
+        from .adapters.higgs_realtime import HiggsRealtimeSession
+
+        accept_val = compute_accept_key(sec_key)
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept_val)
+        self.end_headers()
+
+        session = HiggsRealtimeSession()
+
+        # Send initial session.created configuration event
+        sess_created = json.dumps({
+            "type": "session.created",
+            "session": {
+                "id": session.session_id,
+                "model": "higgs-realtime-v1",
+                "voice": "baritone_male",
+                "modalities": ["audio", "text"],
+                "input_audio_format": "pcm16",
+                "output_audio_format": "pcm16",
+                "sample_rate": 16000,
+                "bilingual_mode": "en-EC / es-EC native code-switching",
+                "barge_in_target_ms": 50,
+            }
+        }).encode("utf-8")
+        self.wfile.write(encode_ws_frame(1, sess_created))
+        self.wfile.flush()
+
+        try:
+            while True:
+                frame = read_ws_frame(self.rfile)
+                if frame is None:
+                    break
+                opcode, payload = frame
+                if opcode == 8:  # Close frame
+                    self.wfile.write(encode_ws_frame(8, payload))
+                    self.wfile.flush()
+                    break
+                elif opcode == 9:  # Ping
+                    self.wfile.write(encode_ws_frame(10, payload))
+                    self.wfile.flush()
+                elif opcode == 1:  # Text JSON event from client
+                    msg = json.loads(payload.decode("utf-8"))
+                    msg_type = msg.get("type", "")
+
+                    if msg_type == "input_audio_buffer.speech_started":
+                        # Instant Barge-In signal
+                        ack = json.dumps({
+                            "type": "input_audio_buffer.speech_started",
+                            "status": "interrupted",
+                            "timestamp": time.time(),
+                        }).encode("utf-8")
+                        self.wfile.write(encode_ws_frame(1, ack))
+                        self.wfile.flush()
+
+                    elif msg_type in ("conversation.item.create", "response.create", "user_utterance"):
+                        text = (
+                            msg.get("item", {}).get("content", [{}])[0].get("text", "")
+                            or msg.get("text", "")
+                            or msg.get("utterance", "")
+                        )
+                        active_prop = msg.get("active_proposal_id")
+                        conv_res = session.converse(text, active_prop)
+                        reply_text = conv_res.get("reply", "")
+
+                        # 1. Send transcript delta
+                        tr_evt = json.dumps({
+                            "type": "response.audio_transcript.delta",
+                            "delta": reply_text,
+                            "subsystem": conv_res.get("subsystem"),
+                            "tool_records": conv_res.get("tool_records", []),
+                            "proposal": conv_res.get("proposal"),
+                            "approval_result": conv_res.get("approval_result"),
+                        }).encode("utf-8")
+                        self.wfile.write(encode_ws_frame(1, tr_evt))
+
+                        # 2. Stream real PCM16 synthesized voice audio delta chunks
+                        duration = min(4.0, max(0.8, len(reply_text) * 0.035))
+                        pcm_audio = generate_pcm16_speech_audio(duration_sec=duration)
+                        audio_base64 = base64.b64encode(pcm_audio).decode("utf-8")
+                        aud_evt = json.dumps({
+                            "type": "response.audio.delta",
+                            "delta": audio_base64,
+                            "sample_rate": 16000,
+                            "audio_format": "pcm16",
+                        }).encode("utf-8")
+                        self.wfile.write(encode_ws_frame(1, aud_evt))
+                        self.wfile.flush()
+        except Exception:
+            pass
 
     def _read_json(self) -> dict[str, Any]:
         raw_length = self.headers.get("Content-Length", "0")

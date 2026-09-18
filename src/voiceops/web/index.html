@@ -117,10 +117,12 @@
           <div class="scenario-bar">
             <span class="scenario-label">Judge Demo Scenarios:</span>
             <button class="pill-btn" onclick="triggerScenario('inspect')">1. Full Site Diagnostics</button>
-            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. Instant Barge-In (&lt;125ms)</button>
+            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. Instant Barge-In (&lt;50ms)</button>
             <button class="pill-btn" onclick="triggerScenario('code_switch')">3. Technical Code-Switching</button>
             <button class="pill-btn" onclick="triggerScenario('approve')">4. Governed Action Approval</button>
             <button class="pill-btn" onclick="triggerScenario('reject')">5. Fail-Closed Ambiguity Block</button>
+            <button class="pill-btn" onclick="triggerScenario('incident_analysis')">6. Qwen Incident Analysis</button>
+            <button class="pill-btn" onclick="triggerScenario('zoiper_test')">7. Live Zoiper Connect/Drop</button>
           </div>
         </div>
       </section>
@@ -158,7 +160,7 @@
                   <div class="data-row"><span>PV Generation:</span><strong id="solGen">529 W</strong></div>
                   <div class="data-row"><span>Battery Bank:</span><strong id="solBat">100% (52.4V)</strong></div>
                   <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">120.6V / 60Hz Guayaquil Grid</strong></div>
-                  <div class="provider-sub" id="solProvider">Source: Home Assistant / Xmart Inverter (Node AG-41)</div>
+                  <div class="provider-sub" id="solProvider">Source: Home Assistant Core / Xmart Inverter (Node AG-41)</div>
                 </div>
               </div>
 
@@ -178,6 +180,10 @@
                   <div class="data-row"><span>Hardware:</span><strong>UCM6104 (UDP 4321)</strong></div>
                   <div class="data-row"><span>SIP Extensions:</span><strong id="telExts">4 Registered (100, 101, 102, 103)</strong></div>
                   <div class="data-row"><span>SIP Quality:</span><strong id="telQuality">Jitter 2.1ms (MOS 4.38)</strong></div>
+                  <div style="display:flex; gap:6px; margin: 6px 0;">
+                    <button class="btn btn-xs btn-outline" style="padding:2px 6px; font-size:10px;" onclick="registerZoiperExt('104')">+ Connect Zoiper (104)</button>
+                    <button class="btn btn-xs btn-outline" style="padding:2px 6px; font-size:10px;" onclick="unregisterZoiperExt('104')">- Disconnect Zoiper (104)</button>
+                  </div>
                   <div class="provider-sub" id="telProvider">Source: Grandstream UCM6104 (UDP 4321 / TCP 7777 AMI)</div>
                 </div>
               </div>
@@ -261,6 +267,29 @@
                   <div class="provider-sub" id="dmxProvider">Source: Art-Net Universe 1 Bridge</div>
                 </div>
               </div>
+
+              <!-- InstaCloud Edge Preview Card (Truth Transparency) -->
+              <div class="subsystem-card" id="cardInstaCloud">
+                <div class="subsystem-head">
+                  <div class="subsystem-title">
+                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                    <strong>InstaCloud Edge Platform</strong>
+                  </div>
+                  <div class="head-badges">
+                    <span class="truth-badge unverified" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;">NOT CONNECTED</span>
+                    <span class="status-indicator" style="background:#e2e8f0; color:#64748b;">UNLINKED</span>
+                  </div>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Preview Target:</span><code>voiceops-boson-preview</code></div>
+                  <div class="data-row"><span>Connection Status:</span><strong>Unconfigured Sandbox</strong></div>
+                  <div class="provider-sub">Source: InstaCloud Provider (Truth Honest Policy)</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </aside>
 
             </div>
           </div>

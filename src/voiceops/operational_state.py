@@ -51,6 +51,14 @@ class OperationalStateRegistry:
         self._registered_extensions.append(new_ext)
         return new_ext
 
+    def unregister_extension(self, ext: str) -> dict[str, Any]:
+        """Unregisters/disconnects a SIP extension (e.g. Zoiper client disconnect)."""
+        existing = next((e for e in self._registered_extensions if e["ext"] == ext), None)
+        if existing:
+            self._registered_extensions.remove(existing)
+            return {"ok": True, "unregistered_extension": existing, "all_extensions": list(self._registered_extensions)}
+        return {"ok": False, "error": f"Extension {ext} not found"}
+
     _ap_solaryard_degraded: bool = True
 
     def reset_ap_solaryard(self) -> None:
@@ -221,6 +229,16 @@ class OperationalStateRegistry:
                     {"name": "Audit Fabric Cryptographic Ledger", "engine": "SHA-256 State-Bound", "status": "ONLINE"},
                 ],
                 "cryptographic_store": "ONLINE (SHA-256 Forensic Audit Fabric Active)",
+            },
+            "instacloud": {
+                "subsystem": "instacloud",
+                "source_provider": "InstaCloud Edge Deployment Platform",
+                "truth": "NOT_CONNECTED",
+                "observed_at": _now_iso(),
+                "freshness_seconds": 0.0,
+                "location": "InstaCloud Remote Edge (Unlinked)",
+                "status": "NOT CONNECTED",
+                "note": "Adapter unconfigured or sandbox offline; marked NOT CONNECTED per truth transparency policy.",
             },
         }
 

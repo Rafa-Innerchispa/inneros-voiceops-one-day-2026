@@ -142,11 +142,12 @@ def test_governed_action_fail_closed_on_explicit_negation() -> None:
 
 
 def test_tool_dispatch_router() -> None:
-    assert len(HIGGS_TOOL_DEFINITIONS) == 3
+    assert len(HIGGS_TOOL_DEFINITIONS) >= 3
     tool_names = [t["name"] for t in HIGGS_TOOL_DEFINITIONS]
     assert "inspect_operational_state" in tool_names
     assert "propose_governed_action" in tool_names
     assert "submit_user_approval" in tool_names
+    assert "inneros_analyze_incident" in tool_names
 
     out = execute_tool_call("inspect_operational_state", {"subsystem": "solar_power"})
     assert out["subsystem"] == "solar_power"
@@ -173,7 +174,7 @@ async def test_higgs_realtime_session_events() -> None:
     # 1. Test Session Update Config
     msg = session.get_session_update_message()
     assert msg["type"] == "session.update"
-    assert len(msg["session"]["tools"]) == 3
+    assert len(msg["session"]["tools"]) >= 3
     assert msg["session"]["input_audio_format"] == "pcm16"
 
     # 2. Test Interruption / Barge-In event
