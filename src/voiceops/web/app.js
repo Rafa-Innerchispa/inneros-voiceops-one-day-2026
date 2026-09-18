@@ -197,6 +197,11 @@ async function speakText(text, options = {}) {
       isAudioSpeaking = false;
       document.getElementById("audioPlayingTag")?.classList.add("hidden");
       if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+      if (isVoiceActive && recognition) {
+        try {
+          recognition.start();
+        } catch (e) {}
+      }
     };
 
     utterance.onerror = () => {
@@ -233,16 +238,21 @@ function initSpeechRecognition() {
   rec.lang = "es-EC";
 
   rec.onresult = (event) => {
-    if (bosonTransportMode === "higgs_relay") {
-      return;
-    }
     const lastIndex = event.results.length - 1;
     const transcript = event.results[lastIndex][0].transcript.trim();
-    if (!transcript || transcript.length <= 1 || transcript === lastSpokenTranscript) {
+    if (!transcript || transcript.length <= 1) {
+      return;
+    }
+    const now = Date.now();
+    if (transcript === lastSpokenTranscript && now - (window.__lastSpeechAt || 0) < 4000) {
       return;
     }
     lastSpokenTranscript = transcript;
+    window.__lastSpeechAt = now;
     console.log("🎤 Voice recognized:", transcript);
+    if (isAudioSpeaking) {
+      triggerInstantBargeIn();
+    }
     appendChat("user", transcript);
     processSpokenCommand(transcript);
   };
@@ -268,9 +278,12 @@ async function initBosonSession() {
     const res = await fetch("/api/boson/token");
     if (!res.ok) throw new Error("Could not mint ephemeral token");
     const data = await res.json();
-    bosonTransportMode = data.mode || (data.token ? "higgs_relay" : "browser_fallback");
+    const legacyFakeToken = typeof data.token === "string" && data.token.startsWith("higgs_tok_");
+    bosonTransportMode =
+      data.mode ||
+      (data.token && data.ws_url && !legacyFakeToken ? "higgs_relay" : "browser_fallback");
 
-    if (bosonTransportMode === "browser_fallback" || !data.token || !data.ws_url) {
+    if (bosonTransportMode === "browser_fallback" || !data.token || !data.ws_url || legacyFakeToken) {
       bosonTransportMode = "browser_fallback";
       setAudioSource("BROWSER_TTS_FALLBACK");
       appendChat("system", data.label || "BROWSER TTS FALLBACK — using browser SpeechRecognition + speechSynthesis.");
@@ -501,7 +514,11 @@ async function startLiveVoice() {
         triggerInstantBargeIn();
       }
 
-      if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
+      if (
+        bosonTransportMode === "higgs_relay" &&
+        higgsWebSocket &&
+        higgsWebSocket.readyState === WebSocket.OPEN
+      ) {
         const bytes = new Uint8Array(pcm16.buffer);
         let binary = "";
         for (let j = 0; j < bytes.byteLength; j++) {
@@ -520,18 +537,18 @@ async function startLiveVoice() {
     // Connect Boson transport before deciding STT path.
     await initBosonSession();
 
-    // Browser STT for fallback; Higgs relay uses PCM upstream only.
+    // Browser STT drives commands (HTTP converse). PCM WS is optional parallel path.
+    if (!recognition) {
+      recognition = initSpeechRecognition();
+    }
+    if (recognition) {
+      try {
+        recognition.start();
+      } catch (e) {}
+    }
     if (bosonTransportMode !== "higgs_relay") {
       bosonTransportMode = "browser_fallback";
       setAudioSource("BROWSER_TTS_FALLBACK");
-      if (!recognition) {
-        recognition = initSpeechRecognition();
-      }
-      if (recognition) {
-        try {
-          recognition.start();
-        } catch (e) {}
-      }
     }
 
     isVoiceActive = true;
@@ -607,23 +624,7 @@ async function processSpokenCommand(text) {
 
   setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
 
-  // If WebSocket is open, send via WebSocket
-  if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
-    higgsWebSocket.send(
-      JSON.stringify({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: text }],
-        },
-        active_proposal_id: activeProposalId,
-      })
-    );
-    return;
-  }
-
-  // Fallback to HTTP endpoint
+  // Text commands always use HTTP converse (reliable tools + spoken reply). WS is PCM-only.
   try {
     const t0 = performance.now();
     const res = await fetch("/api/boson/converse", {
