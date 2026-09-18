@@ -22,3 +22,5 @@ secrets/
 recordings/private/
 evidence/private/
 runtime/
+.pytest_temp/
+*.egg-info/

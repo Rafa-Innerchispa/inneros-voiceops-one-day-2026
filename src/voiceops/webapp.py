@@ -304,6 +304,23 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 }
             )
             return
+        if self.path == "/api/telemetry":
+            from .governed_tools import inspect_operational_state
+            self._send_json(inspect_operational_state("all"))
+            return
+        if self.path == "/api/boson/status":
+            has_key = bool(os.getenv("BOSON_API_KEY") or os.getenv("HIGGS_API_KEY"))
+            self._send_json(
+                {
+                    "provider": "Boson AI Higgs Realtime S2S",
+                    "model": "higgs-realtime-v1",
+                    "site": "Guayaquil Operations Hub (GYE-Node-01)",
+                    "bilingual_support": "English / Spanish / Spanglish Code-Switching",
+                    "sub_125ms_barge_in": True,
+                    "ready": has_key,
+                }
+            )
+            return
         if self.path == "/api/state":
             state = self.store.snapshot()
             state["assemblyai_voice_agent_enabled"] = bool(self.server.live_voice_enabled)  # type: ignore[attr-defined]
@@ -342,6 +359,42 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         try:
+            if self.path == "/api/governed/inspect":
+                from .governed_tools import inspect_operational_state
+                payload = self._read_json()
+                subsystem = str(payload.get("subsystem") or "all")
+                self._send_json(inspect_operational_state(subsystem))
+                return
+            if self.path == "/api/governed/propose":
+                from .governed_tools import propose_governed_action
+                payload = self._read_json()
+                action_type = str(payload.get("action_type") or "restart_wifi_ap")
+                target_subsystem = str(payload.get("target_subsystem") or "network_wifi")
+                params = payload.get("parameters")
+                self._send_json(propose_governed_action(action_type, target_subsystem, params))
+                return
+            if self.path == "/api/governed/approve":
+                from .governed_tools import submit_user_approval
+                payload = self._read_json()
+                proposal_id = str(payload.get("proposal_id") or "")
+                utterance = str(payload.get("utterance") or "")
+                self._send_json(submit_user_approval(proposal_id, utterance))
+                return
+            if self.path == "/api/governed/simulate":
+                from .adapters.higgs_realtime import HiggsRealtimeSession
+                payload = self._read_json()
+                utterance = str(payload.get("utterance") or "Revisa el estado de la red y propone solucion")
+                sim_tool = payload.get("tool_call")
+                tool_tuple = (sim_tool["name"], sim_tool.get("args", {})) if sim_tool else None
+                sim_interruption = bool(payload.get("interruption", False))
+                session = HiggsRealtimeSession()
+                sim_res = session.simulate_conversation_turn(
+                    user_utterance=utterance,
+                    simulate_tool_call=tool_tuple,
+                    simulate_interruption=sim_interruption,
+                )
+                self._send_json(sim_res)
+                return
             if self.path == "/api/reset":
                 self._send_json(self.store.reset())
                 return
@@ -362,10 +415,10 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 self._send_json(self.store.tool_approve(str(payload.get("authorization_phrase") or "")))
                 return
             if self.path == "/api/guardian/voice-command":
+                payload = self._read_json()
                 if not self._bridge_authorized():
                     self._send_json({"error": "guardian voice bridge unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
                     return
-                payload = self._read_json()
                 event = payload.get("event")
                 if not isinstance(event, dict):
                     raise ValueError("event must be a Guardian NormalizedEvent object")

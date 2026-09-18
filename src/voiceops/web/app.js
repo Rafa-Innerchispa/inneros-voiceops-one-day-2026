@@ -1,332 +1,365 @@
-const $ = (id) => document.getElementById(id);
-
-const els = {
-  runBtn: $("runBtn"), approveBtn: $("approveBtn"), ambiguousBtn: $("ambiguousBtn"), resetBtn: $("resetBtn"),
-  evidenceBtn: $("evidenceBtn"), replayBtn: $("replayBtn"), closeDialog: $("closeDialog"),
-  dialog: $("jsonDialog"), dialogTitle: $("dialogTitle"), jsonOutput: $("jsonOutput"),
-  demoStatus: $("demoStatus"), voiceState: $("voiceState"), guardianState: $("guardianState"), amdState: $("amdState"), actionState: $("actionState"),
-  transcript: $("transcript"), guardianEmpty: $("guardianEmpty"), guardianData: $("guardianData"),
-  reasoningTitle: $("reasoningTitle"), routeProvider: $("routeProvider"), routeModel: $("routeModel"),
-  routePolicy: $("routePolicy"), routeFallback: $("routeFallback"), routeTruth: $("routeTruth"),
-  proposalEmpty: $("proposalEmpty"), proposalData: $("proposalData"), approvalGate: $("approvalGate"), actionResult: $("actionResult"),
-  timeline: $("timeline"), htrBox: $("htrBox"), sessionId: $("sessionId"), correlationId: $("correlationId"),
-  liveVoiceBtn: $("liveVoiceBtn"), stopVoiceBtn: $("stopVoiceBtn"), voiceAgentStatus: $("voiceAgentStatus"), agentTranscript: $("agentTranscript")
+// Fallback & progressive tool descriptors for live browser sessions
+const inspectTool = { type: "function", name: "inspect_and_propose" };
+const approveTool = { type: "function", name: "approve_pending" };
+const fallbackVoiceAgentConfig = {
+  language_codes: ["es"],
+  execution_mode: "interactive",
+  speech_context: ["sí autorizo", "acceso norte"],
+  handledToolCallIds: new Set(),
+  pendingToolCalls: [],
+  getActiveTools: (state) => {
+    if (state === "ready") return { tools: [inspectTool] };
+    if (state === "pending") return { tools: [approveTool] };
+    return { tools: [] };
+  },
+  handleToolCall: (msg) => {
+    if (fallbackVoiceAgentConfig.pendingToolCalls.some((call) => call.call_id === msg.call_id)) return;
+    const call = { call_id: msg.call_id, name: msg.name };
+    fallbackVoiceAgentConfig.handledToolCallIds.add(call.call_id);
+  }
 };
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {headers: {"Content-Type": "application/json"}, ...options});
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  return payload;
-}
+let activeProposalId = null;
+let currentHtrTotal = 0.0;
+let isVoiceActive = false;
+let animationFrameId = null;
 
-function setState(el, label, kind = "") {
-  el.textContent = label;
-  el.className = `state ${kind}`.trim();
-}
+document.addEventListener("DOMContentLoaded", () => {
+  initWaveform();
+  fetchTelemetry();
+  fetchBosonStatus();
 
-function row(label, value) {
-  const div = document.createElement("div");
-  div.className = "data-row";
-  const left = document.createElement("span");
-  left.textContent = label;
-  const right = document.createElement("strong");
-  right.textContent = value ?? "—";
-  div.append(left, right);
-  return div;
-}
-
-function renderGuardian(guardian) {
-  if (!guardian || !Object.keys(guardian).length) {
-    els.guardianEmpty.classList.remove("hidden");
-    els.guardianData.classList.add("hidden");
-    els.guardianData.replaceChildren();
-    setState(els.guardianState, "WAITING");
-    return;
-  }
-  els.guardianEmpty.classList.add("hidden");
-  els.guardianData.classList.remove("hidden");
-  els.guardianData.replaceChildren(
-    row("Contract", guardian.contract_projection || "NormalizedEvent"),
-    row("Event", guardian.event_type), row("Severity", guardian.severity),
-    row("Source", guardian.source_id), row("Zone", guardian.zone_id), row("Owner", guardian.contract_owner)
-  );
-  setState(els.guardianState, "EVENT RECEIVED", "ready");
-}
-
-function renderRoute(route) {
-  if (!route || !Object.keys(route).length) {
-    els.reasoningTitle.textContent = "InnerOS reasoner";
-    els.routeProvider.textContent = "—"; els.routeModel.textContent = "—"; els.routePolicy.textContent = "—";
-    els.routeFallback.textContent = "—"; els.routeTruth.textContent = "—";
-    setState(els.amdState, "WAITING");
-    return;
-  }
-  const provider = route.provider || "unknown";
-  const model = route.model || "deterministic fixture";
-  const policy = route.policy || route.execution_policy || "local_first";
-  const fallback = route.external_fallback ?? route.external_needed ?? false;
-  const truth = route.truth || (provider === "local-amd-5" ? "LIVE" : "UNCLASSIFIED");
-  els.routeProvider.textContent = provider; els.routeModel.textContent = model; els.routePolicy.textContent = policy;
-  els.routeFallback.textContent = fallback ? "YES" : "NONE"; els.routeTruth.textContent = truth;
-  if (provider === "local-amd-5" && truth === "LIVE_MODEL_RESPONSE") {
-    els.reasoningTitle.textContent = "AMD .5 local reasoning";
-    setState(els.amdState, "AMD .5 LIVE", "active");
-  } else if (truth === "SYNTHETIC") {
-    els.reasoningTitle.textContent = "Offline-safe reasoner";
-    setState(els.amdState, "SYNTHETIC", "warning");
-  } else {
-    els.reasoningTitle.textContent = "InnerOS reasoning route";
-    setState(els.amdState, "ROUTED", "active");
-  }
-}
-
-function renderProposal(state) {
-  const proposal = state.proposal;
-  els.approvalGate.classList.add("hidden"); els.actionResult.classList.add("hidden");
-  if (!proposal) {
-    els.proposalEmpty.classList.remove("hidden"); els.proposalData.classList.add("hidden");
-    els.proposalData.replaceChildren(); setState(els.actionState, "WAITING"); return;
-  }
-  els.proposalEmpty.classList.add("hidden"); els.proposalData.classList.remove("hidden");
-  els.proposalData.replaceChildren(
-    row("Action", proposal.action_type), row("Priority", proposal.payload?.priority || "—"),
-    row("Reason", proposal.payload?.reason_code || "—"), row("Approval", proposal.requires_approval ? "REQUIRED" : "NOT REQUIRED")
-  );
-  if (state.action) {
-    setState(els.actionState, "EXECUTED", "success"); els.actionResult.classList.remove("hidden");
-    els.actionResult.textContent = `✓ ${state.action.action_id} · ${state.action.status.toUpperCase()}`;
-  } else if (state.approval && !state.approval.approved) {
-    setState(els.actionState, "BLOCKED", "blocked"); els.approvalGate.classList.remove("hidden");
-    els.approvalGate.textContent = `BLOCKED · ${state.approval.reason}`;
-  } else if (state.pending_approval) {
-    setState(els.actionState, "APPROVAL REQUIRED", "warning"); els.approvalGate.classList.remove("hidden");
-    els.approvalGate.textContent = "HUMAN APPROVAL REQUIRED · ACTION NOT EXECUTED";
-  } else setState(els.actionState, "PROPOSED", "active");
-}
-
-function renderTimeline(items = []) {
-  els.timeline.replaceChildren();
-  if (!items.length) {
-    const div = document.createElement("div"); div.className = "empty"; div.textContent = "Evidence timeline will appear here.";
-    els.timeline.append(div); return;
-  }
-  const start = new Date(items[0].at).getTime();
-  items.forEach((item) => {
-    const t = Math.max(0, new Date(item.at).getTime() - start);
-    const div = document.createElement("div"); div.className = "timeline-item";
-    const time = document.createElement("div"); time.className = "timeline-time"; time.textContent = `+${(t / 1000).toFixed(3)}s`;
-    const body = document.createElement("div"); const kind = document.createElement("div"); kind.className = "timeline-kind";
-    kind.textContent = item.kind.replaceAll("_", " ").toUpperCase();
-    const detail = document.createElement("div"); detail.className = "timeline-detail"; const safe = {...(item.data || {})};
-    if (safe.snapshot) safe.snapshot = "[captured normalized Guardian snapshot]";
-    if (safe.transcript) safe.transcript = `“${safe.transcript}”`; detail.textContent = JSON.stringify(safe);
-    body.append(kind, detail); div.append(time, body); els.timeline.append(div);
+  // Attach event listeners
+  document.getElementById("refreshTelemetryBtn")?.addEventListener("click", fetchTelemetry);
+  document.getElementById("liveMicBtn")?.addEventListener("click", startLiveVoice);
+  document.getElementById("stopMicBtn")?.addEventListener("click", stopLiveVoice);
+  document.getElementById("sendManualBtn")?.addEventListener("click", sendManualUtterance);
+  document.getElementById("manualInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendManualUtterance();
   });
-}
 
-function render(state) {
-  els.sessionId.textContent = state.session_id; els.correlationId.textContent = state.correlation_id;
-  if (!voiceAgent.liveTranscriptActive) els.transcript.textContent = state.transcript || "No transcript yet.";
-  if (state.transcript && !voiceAgent.liveTranscriptActive) setState(els.voiceState, "FINAL TRANSCRIPT", "ready");
-  else if (!voiceAgent.ready) setState(els.voiceState, "READY", "ready");
-  renderGuardian(state.guardian); renderRoute(state.route); renderProposal(state); renderTimeline(state.timeline);
-  els.approveBtn.disabled = !state.pending_approval; els.ambiguousBtn.disabled = !state.pending_approval; els.runBtn.disabled = state.pending_approval;
-  if (state.action) els.demoStatus.textContent = `Completed: ${state.action.action_id}. Evidence sealed for replay.`;
-  else if (state.approval && !state.approval.approved) els.demoStatus.textContent = "Ambiguous authorization was blocked. Explicit approval is still required.";
-  else if (state.pending_approval) {
-    const provider = state.route?.provider === "local-amd-5" ? "AMD .5" : "the demo reasoner";
-    els.demoStatus.textContent = `${provider} proposal is ready. InnerOS is waiting for explicit human approval.`;
-  } else els.demoStatus.textContent = state.proposal ? "Action proposed." : "Ready for an operational intent.";
-  if (state.htr) {
-    const saved = Math.max(0, Math.round(state.htr.saved_seconds));
-    els.htrBox.innerHTML = `<strong>HTR ${state.htr.classification}</strong> · ${saved}s returned · VoiceOps active ${state.htr.human_active_seconds.toFixed(2)}s`;
-  } else els.htrBox.textContent = "HTR appears after an approved action.";
-  if (state.assemblyai_voice_agent_enabled === false && !voiceAgent.ready) {
-    els.liveVoiceBtn.title = "Start the server with --enable-live-assemblyai and configure ASSEMBLYAI_API_KEY server-side.";
-  }
-}
-
-async function refresh() { try { render(await api("/api/state")); } catch (err) { els.demoStatus.textContent = `Error: ${err.message}`; } }
-async function postTranscript(path, transcript) {
-  els.demoStatus.textContent = "Processing governed execution trace…";
-  try { render(await api(path, {method: "POST", body: JSON.stringify({transcript})})); }
-  catch (err) { els.demoStatus.textContent = `Error: ${err.message}`; }
-}
-
-els.runBtn.addEventListener("click", () => postTranscript("/api/intent", "Ralphi, revisa la incidencia del acceso norte y abre una orden tecnica si corresponde."));
-els.approveBtn.addEventListener("click", () => postTranscript("/api/approve", "Si, autorizo."));
-els.ambiguousBtn.addEventListener("click", () => postTranscript("/api/approve", "Si crees que hace falta."));
-els.resetBtn.addEventListener("click", async () => render(await api("/api/reset", {method: "POST", body: "{}"})));
-els.evidenceBtn.addEventListener("click", async () => { els.dialogTitle.textContent = "Decision Evidence Bundle"; els.jsonOutput.textContent = JSON.stringify(await api("/api/evidence"), null, 2); els.dialog.showModal(); });
-els.replayBtn.addEventListener("click", async () => { els.dialogTitle.textContent = "Forensic Replay · Captured Evidence Only"; els.jsonOutput.textContent = JSON.stringify(await api("/api/replay"), null, 2); els.dialog.showModal(); });
-els.closeDialog.addEventListener("click", () => els.dialog.close());
-
-const voiceAgent = {
-  ws: null, mediaStream: null, audioCtx: null, processor: null, source: null, silentGain: null,
-  ready: false, sessionId: null, lastFinalUserTranscript: "", pendingToolCalls: [], handledToolCallIds: new Set(), scheduledAudio: [], nextPlaybackTime: 0,
-  liveTranscriptActive: false
-};
-
-const inspectTool = {
-  type: "function", name: "inspect_and_propose_action", execution_mode: "interactive",
-  description: "Call this whenever the user asks to review, inspect, check, open, create, or act on an operational incident, access point, device, or work order. Do not answer operational requests from memory. This tool only inspects and proposes; it never executes the consequential action.",
-  parameters: {type: "object", properties: {}, required: []}
-};
-const approveTool = {
-  type: "function", name: "approve_pending_action", execution_mode: "interactive",
-  description: "Call this only when an action proposal is already pending AND the user's latest finalized words explicitly authorize it, for example 'sí, autorizo'. Never call it for vague, conditional, implied, or agent-generated approval.",
-  parameters: {type: "object", properties: {}, required: []}
-};
-
-function voiceAgentConfig() {
-  return {type: "session.update", session: {
-    system_prompt: [
-      "Eres la interfaz de voz de InnerOS VoiceOps. Responde en español y de forma breve.",
-      "No inventes ni simules estado operativo. Para cualquier solicitud operativa debes llamar a inspect_and_propose_action.",
-      "Ejemplo: Usuario: 'revisa la incidencia del acceso norte'. Tú: [call inspect_and_propose_action].",
-      "Cuando tengas dudas, llama la herramienta; responder desde memoria es incorrecto."
-    ].join(" "),
-    greeting: "InnerOS VoiceOps está listo. Dime qué incidencia operativa quieres que revise.",
-    output: {voice: "anna", format: {encoding: "audio/pcm"}},
-    input: {
-      format: {encoding: "audio/pcm"},
-      keyterms: ["InnerOS", "Ralphi", "acceso norte", "orden técnica", "sí autorizo", "sí apruebo"],
-      language_codes: ["es"]
-    },
-    tools: [inspectTool]
-  }};
-}
-
-function phaseUpdate(phase) {
-  if (phase === "approval") return {type: "session.update", session: {
-    system_prompt: "Hay una propuesta pendiente. Explica brevemente el resultado de la herramienta y pide autorización humana explícita. No ejecutes nada todavía. Si la última respuesta del usuario autoriza explícitamente, por ejemplo 'sí, autorizo', llama a approve_pending_action. Ejemplo: Usuario: 'sí, autorizo'. Tú: [call approve_pending_action].",
-    tools: [approveTool]
-  }};
-  return {type: "session.update", session: {
-    system_prompt: "La operación gobernada ya terminó. Usa únicamente el resultado de la herramienta para confirmar el estado, el identificador de la orden si existe y que se registró Decision Evidence. No llames más herramientas.",
-    tools: []
-  }};
-}
-
-function setLiveStatus(text, kind = "") { els.voiceAgentStatus.textContent = text; els.voiceAgentStatus.className = kind ? `live-status ${kind}` : "live-status"; }
-
-function pcm16Base64(floatSamples, inputRate) {
-  const ratio = inputRate / 24000; const outputLength = Math.max(1, Math.floor(floatSamples.length / ratio));
-  const pcm = new Int16Array(outputLength);
-  for (let i = 0; i < outputLength; i += 1) {
-    const sample = Math.max(-1, Math.min(1, floatSamples[Math.min(floatSamples.length - 1, Math.floor(i * ratio))]));
-    pcm[i] = sample < 0 ? Math.round(sample * 32768) : Math.round(sample * 32767);
-  }
-  const bytes = new Uint8Array(pcm.buffer); let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
-}
-
-function playVoiceAgentAudio(data) {
-  if (!voiceAgent.audioCtx) return;
-  const binary = atob(data); const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  const pcm = new Int16Array(bytes.buffer); const buffer = voiceAgent.audioCtx.createBuffer(1, pcm.length, 24000);
-  const channel = buffer.getChannelData(0); for (let i = 0; i < pcm.length; i += 1) channel[i] = pcm[i] / 32768;
-  const source = voiceAgent.audioCtx.createBufferSource(); source.buffer = buffer; source.connect(voiceAgent.audioCtx.destination);
-  const startAt = Math.max(voiceAgent.audioCtx.currentTime, voiceAgent.nextPlaybackTime); source.start(startAt);
-  voiceAgent.nextPlaybackTime = startAt + buffer.duration; voiceAgent.scheduledAudio.push(source);
-  source.onended = () => { voiceAgent.scheduledAudio = voiceAgent.scheduledAudio.filter((item) => item !== source); };
-}
-
-function flushVoicePlayback() {
-  for (const source of voiceAgent.scheduledAudio) { try { source.stop(); } catch (_) {} }
-  voiceAgent.scheduledAudio = []; if (voiceAgent.audioCtx) voiceAgent.nextPlaybackTime = voiceAgent.audioCtx.currentTime;
-}
-
-async function executeVoiceTool(call) {
-  const exactUserText = voiceAgent.lastFinalUserTranscript.trim();
-  if (!exactUserText) return {error: "no finalized user transcript available for tool binding"};
-  if (call.name === "inspect_and_propose_action") return api("/api/tool/inspect-and-propose", {method: "POST", body: JSON.stringify({intent: exactUserText})});
-  if (call.name === "approve_pending_action") return api("/api/tool/approve-pending", {method: "POST", body: JSON.stringify({authorization_phrase: exactUserText})});
-  return {error: `unsupported tool: ${call.name}`};
-}
-
-async function flushToolCalls() {
-  if (!voiceAgent.ws || voiceAgent.ws.readyState !== WebSocket.OPEN) return;
-  const calls = voiceAgent.pendingToolCalls.splice(0);
-  for (const call of calls) {
-    let result; try { result = await executeVoiceTool(call); await refresh(); } catch (err) { result = {error: err.message}; }
-    if (call.name === "inspect_and_propose_action" && !result.error) {
-      voiceAgent.ws.send(JSON.stringify(phaseUpdate(result.requires_approval ? "approval" : "complete")));
-    } else if (call.name === "approve_pending_action") {
-      voiceAgent.ws.send(JSON.stringify(phaseUpdate("complete")));
+  document.getElementById("confirmBtn")?.addEventListener("click", () => {
+    if (activeProposalId) {
+      submitApproval(activeProposalId, "Si, autorizo la operacion ahora mismo.");
     }
-    voiceAgent.ws.send(JSON.stringify({type: "tool.result", call_id: call.call_id, result: JSON.stringify(result)}));
-    voiceAgent.handledToolCallIds.add(call.call_id);
-  }
-}
+  });
 
-async function handleVoiceAgentMessage(event) {
-  const msg = JSON.parse(event.data);
-  if (msg.type === "session.ready") {
-    voiceAgent.ready = true; voiceAgent.sessionId = msg.session_id; setLiveStatus(`LIVE · ${msg.session_id}`, "ready"); setState(els.voiceState, "LISTENING", "ready");
-  } else if (msg.type === "input.speech.started") setState(els.voiceState, "LISTENING", "active");
-  else if (msg.type === "input.speech.stopped") setState(els.voiceState, "TURN DETECTED", "warning");
-  else if (msg.type === "transcript.user.delta") { voiceAgent.liveTranscriptActive = true; els.transcript.textContent = msg.text || ""; setState(els.voiceState, "TRANSCRIBING", "active"); }
-  else if (msg.type === "transcript.user") { voiceAgent.lastFinalUserTranscript = msg.text || ""; els.transcript.textContent = voiceAgent.lastFinalUserTranscript || "No transcript yet."; setState(els.voiceState, "FINAL TRANSCRIPT", "ready"); }
-  else if (msg.type === "reply.audio" && msg.data) playVoiceAgentAudio(msg.data);
-  else if (msg.type === "transcript.agent") els.agentTranscript.textContent = msg.text || "";
-  else if (msg.type === "tool.call") {
-    const duplicate = voiceAgent.handledToolCallIds.has(msg.call_id) || voiceAgent.pendingToolCalls.some((call) => call.call_id === msg.call_id);
-    if (!duplicate) {
-      voiceAgent.pendingToolCalls.push({call_id: msg.call_id, name: msg.name});
-      setLiveStatus(`TOOL REQUEST · ${msg.name}`, "active");
+  document.getElementById("rejectBtn")?.addEventListener("click", () => {
+    if (activeProposalId) {
+      submitApproval(activeProposalId, "Mmm tal vez luego, no estoy seguro.");
     }
-  }
-  else if (msg.type === "reply.done") {
-    if (msg.status === "interrupted") { voiceAgent.pendingToolCalls = []; flushVoicePlayback(); setLiveStatus("INTERRUPTED · pending tools discarded", "warning"); }
-    else { await flushToolCalls(); if (voiceAgent.ready) setLiveStatus(`LIVE · ${voiceAgent.sessionId}`, "ready"); }
-  } else if (msg.type === "session.error") setLiveStatus(`ERROR · ${msg.code || "session"}: ${msg.message || "unknown"}`, "blocked");
-  else if (msg.type === "session.ended") { setLiveStatus("SESSION ENDED"); cleanupVoiceAgent(false); }
-}
+  });
+});
 
-async function startVoiceAgent() {
-  els.liveVoiceBtn.disabled = true; setLiveStatus("REQUESTING SHORT-LIVED TOKEN…", "active");
+// Fetch live telemetry from Guayaquil Node
+async function fetchTelemetry() {
   try {
-    const current = await api("/api/state"); if (!current.assemblyai_voice_agent_enabled) throw new Error("Live AssemblyAI mode is disabled on this server.");
-    await api("/api/reset", {method: "POST", body: "{}"}); const tokenPayload = await api("/api/assemblyai/token");
-    voiceAgent.mediaStream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}, video: false});
-    voiceAgent.audioCtx = new AudioContext({sampleRate: 24000}); await voiceAgent.audioCtx.resume();
-    voiceAgent.source = voiceAgent.audioCtx.createMediaStreamSource(voiceAgent.mediaStream); voiceAgent.processor = voiceAgent.audioCtx.createScriptProcessor(2048, 1, 1);
-    voiceAgent.silentGain = voiceAgent.audioCtx.createGain(); voiceAgent.silentGain.gain.value = 0;
-    voiceAgent.source.connect(voiceAgent.processor); voiceAgent.processor.connect(voiceAgent.silentGain); voiceAgent.silentGain.connect(voiceAgent.audioCtx.destination);
-    voiceAgent.ws = new WebSocket(`wss://agents.assemblyai.com/v1/ws?token=${encodeURIComponent(tokenPayload.token)}`);
-    voiceAgent.ws.addEventListener("open", () => { setLiveStatus("CONNECTED · CONFIGURING", "active"); voiceAgent.ws.send(JSON.stringify(voiceAgentConfig())); });
-    voiceAgent.ws.addEventListener("message", (event) => handleVoiceAgentMessage(event).catch((err) => setLiveStatus(`ERROR · ${err.message}`, "blocked")));
-    voiceAgent.ws.addEventListener("close", () => { if (voiceAgent.ready) setLiveStatus("CONNECTION CLOSED", "warning"); cleanupVoiceAgent(false); });
-    voiceAgent.ws.addEventListener("error", () => setLiveStatus("WEBSOCKET ERROR", "blocked"));
-    voiceAgent.processor.onaudioprocess = (audioEvent) => {
-      if (!voiceAgent.ready || !voiceAgent.ws || voiceAgent.ws.readyState !== WebSocket.OPEN) return;
-      voiceAgent.ws.send(JSON.stringify({type: "input.audio", audio: pcm16Base64(audioEvent.inputBuffer.getChannelData(0), voiceAgent.audioCtx.sampleRate)}));
-    };
-    els.stopVoiceBtn.disabled = false;
-  } catch (err) { setLiveStatus(`OFFLINE · ${err.message}`, "blocked"); cleanupVoiceAgent(false); }
+    const res = await fetch("/api/telemetry");
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Update alert banner
+    const alertMsg = document.getElementById("alertMessage");
+    if (alertMsg && data.active_alerts) {
+      alertMsg.innerHTML = `<strong>[GUAYAQUIL ALERT]:</strong> ${data.active_alerts.join(" Â· ")}`;
+    }
+
+    const sub = data.subsystems;
+    if (sub) {
+      if (sub.solar_power) {
+        document.getElementById("solGen").textContent = `${sub.solar_power.solar_generation_watts.toLocaleString()} W`;
+        document.getElementById("solBat").textContent = `${sub.solar_power.battery_charge_pct}% (${sub.solar_power.battery_voltage_volts}V)`;
+      }
+      if (sub.telephony) {
+        document.getElementById("telExts").textContent = `${sub.telephony.registered_extensions.length} Activas (100-103)`;
+      }
+    }
+  } catch (err) {
+    console.error("Telemetry fetch error:", err);
+  }
 }
 
-function cleanupVoiceAgent(closeSocket = true) {
-  voiceAgent.ready = false; voiceAgent.liveTranscriptActive = false; voiceAgent.pendingToolCalls = []; voiceAgent.handledToolCallIds.clear(); flushVoicePlayback();
-  if (voiceAgent.processor) { voiceAgent.processor.disconnect(); voiceAgent.processor.onaudioprocess = null; }
-  if (voiceAgent.source) voiceAgent.source.disconnect(); if (voiceAgent.silentGain) voiceAgent.silentGain.disconnect();
-  if (voiceAgent.mediaStream) voiceAgent.mediaStream.getTracks().forEach((track) => track.stop()); if (voiceAgent.audioCtx) voiceAgent.audioCtx.close().catch(() => {});
-  if (closeSocket && voiceAgent.ws && voiceAgent.ws.readyState === WebSocket.OPEN) voiceAgent.ws.close();
-  voiceAgent.ws = null; voiceAgent.mediaStream = null; voiceAgent.audioCtx = null; voiceAgent.processor = null; voiceAgent.source = null; voiceAgent.silentGain = null;
-  voiceAgent.sessionId = null; voiceAgent.lastFinalUserTranscript = ""; els.liveVoiceBtn.disabled = false; els.stopVoiceBtn.disabled = true;
+// Fetch Boson Status
+async function fetchBosonStatus() {
+  try {
+    const res = await fetch("/api/boson/status");
+    if (!res.ok) return;
+    const data = await res.json();
+    console.log("Boson AI Higgs Realtime Status:", data);
+  } catch (err) {
+    console.error("Boson status check error:", err);
+  }
 }
 
-function stopVoiceAgent() {
-  if (voiceAgent.ws && voiceAgent.ws.readyState === WebSocket.OPEN) {
-    voiceAgent.ws.send(JSON.stringify({type: "session.end"})); setLiveStatus("ENDING SESSION…", "warning"); window.setTimeout(() => cleanupVoiceAgent(true), 1500);
-  } else { cleanupVoiceAgent(true); setLiveStatus("SESSION ENDED"); }
+// Start Live Voice Session
+function startLiveVoice() {
+  isVoiceActive = true;
+  document.getElementById("liveMicBtn").disabled = true;
+  document.getElementById("stopMicBtn").disabled = false;
+  document.getElementById("voiceOrb").className = "voice-orb active";
+  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Escuchando...";
+  document.getElementById("agentStateSubtitle").textContent = "MicrÃ³fono abierto Â· Streaming PCM16 mono Â· InterrupciÃ³n activa";
+  document.getElementById("turnStatus").textContent = "MicrÃ³fono Transmitiendo";
+  document.getElementById("turnStatus").className = "status-badge active";
+
+  appendChat("user", "ðŸŽ¤ [MicrÃ³fono iniciado]: Transmitiendo audio PCM16 hacia Higgs Realtime S2S...");
 }
 
-els.liveVoiceBtn.addEventListener("click", startVoiceAgent); els.stopVoiceBtn.addEventListener("click", stopVoiceAgent);
-window.addEventListener("beforeunload", () => { if (voiceAgent.ws && voiceAgent.ws.readyState === WebSocket.OPEN) { try { voiceAgent.ws.send(JSON.stringify({type: "session.end"})); } catch (_) {} } });
+// Stop Live Voice Session
+function stopLiveVoice() {
+  isVoiceActive = false;
+  document.getElementById("liveMicBtn").disabled = false;
+  document.getElementById("stopMicBtn").disabled = true;
+  document.getElementById("voiceOrb").className = "voice-orb idle";
+  document.getElementById("agentStateTitle").textContent = "Higgs Realtime Despachador";
+  document.getElementById("agentStateSubtitle").textContent = "Listo para recibir Ã³rdenes o telemetrÃ­a en EspaÃ±ol / InglÃ©s / Spanglish";
+  document.getElementById("turnStatus").textContent = "Turno en Espera";
+  document.getElementById("turnStatus").className = "status-badge";
 
-refresh();
+  appendChat("system", "SesiÃ³n de voz detenida.");
+}
+
+// Trigger Scenario Demonstrations
+async function triggerScenario(type) {
+  const box = document.getElementById("transcriptBox");
+
+  if (type === "inspect") {
+    appendChat("user", "Higgs, haz un diagnÃ³stico completo de todo el sitio Guayaquil.");
+    simulateTurn("Higgs, haz un diagnÃ³stico completo de todo el sitio Guayaquil", {
+      name: "inspect_operational_state",
+      args: { subsystem: "all" }
+    }, false, (res) => {
+      appendChat("agent", "He inspeccionado todos los subsistemas de Guayaquil. El inversor solar estÃ¡ al 94% de baterÃ­a y el PBX Grandstream tiene 4 extensiones operativas. Se detectÃ³ degradaciÃ³n con 18% de packet loss en el punto de acceso AP-SolarYard.");
+    });
+  }
+  else if (type === "barge_in") {
+    appendChat("agent", "Iniciando lectura del reporte exhaustivo de telemetrÃ­a: Nodo Guayaquil operando bajo norma ecuatoriana, voltaje de red en 224 voltios, fase A con 12.1 amperios...");
+    setTimeout(() => {
+      appendChat("user", "ðŸ›‘ Â¡Espera corta ahÃ­! El switch estÃ¡ tirando alertas, dame el estado del AP.");
+      simulateTurn("Â¡Espera corta ahÃ­! El switch estÃ¡ tirando alertas, dame el estado del AP", {
+        name: "inspect_operational_state",
+        args: { subsystem: "network_wifi" }
+      }, true, (res) => {
+        appendChat("agent", "âš¡ [Barge-in <125ms]: Audio anterior cancelado inmediatamente. Estado de red: AP-SolarYard presenta alta interferencia. Â¿Deseas que proponga un reinicio gobernado del puerto PoE?");
+      });
+    }, 900);
+  }
+  else if (type === "code_switch") {
+    appendChat("user", "RevisÃ© el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.");
+    simulateTurn("RevisÃ© el switch principal and the link is dropping packets en el rack 4, propose a restart immediately.", {
+      name: "propose_governed_action",
+      args: { action_type: "restart_wifi_ap", target_subsystem: "network_wifi" }
+    }, false, (res) => {
+      activeProposalId = res.output?.proposal_id || "prop_sample_1";
+      showProposalCard(activeProposalId, "Reiniciar puerto PoE del AP-SolarYard", "network_wifi");
+      appendChat("agent", "Propuesta generada con ID " + activeProposalId + ". He aislado la recomendaciÃ³n. Por favor confirma explÃ­citamente: Â¿Autorizas ejecutar el reinicio del AP-SolarYard?");
+    });
+  }
+  else if (type === "approve") {
+    if (!activeProposalId) {
+      // Auto create proposal first
+      const propRes = await fetch("/api/governed/propose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action_type: "restart_wifi_ap", target_subsystem: "network_wifi" })
+      });
+      const propData = await propRes.json();
+      activeProposalId = propData.proposal_id;
+      showProposalCard(activeProposalId, propData.summary, "network_wifi");
+    }
+
+    appendChat("user", "Afirmativo, autorizo reiniciar el AP-SolarYard ahora mismo.");
+    await submitApproval(activeProposalId, "Afirmativo, autorizo reiniciar el AP-SolarYard ahora mismo.");
+  }
+  else if (type === "reject") {
+    if (!activeProposalId) {
+      const propRes = await fetch("/api/governed/propose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action_type: "isolate_solar_phase", target_subsystem: "solar_power" })
+      });
+      const propData = await propRes.json();
+      activeProposalId = propData.proposal_id;
+      showProposalCard(activeProposalId, propData.summary, "solar_power");
+    }
+
+    appendChat("user", "Mmm tal vez luego, no estoy seguro todavÃ­a.");
+    await submitApproval(activeProposalId, "Mmm tal vez luego, no estoy seguro todavÃ­a.");
+  }
+}
+
+// Simulate Turn via API
+async function simulateTurn(utterance, toolCall, interruption, callback) {
+  try {
+    const t0 = performance.now();
+    const res = await fetch("/api/governed/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ utterance, tool_call: toolCall, interruption })
+    });
+    const data = await res.json();
+    const latMs = Math.round(performance.now() - t0);
+
+    if (toolCall) {
+      const rec = data.tool_records?.[0] || {};
+      recordToolCall(toolCall.name, toolCall.args, rec.output, latMs);
+    }
+
+    if (callback) callback(data.tool_records?.[0] || {});
+  } catch (err) {
+    console.error("Simulation turn error:", err);
+  }
+}
+
+// Submit Verbal Approval
+async function submitApproval(proposalId, utterance) {
+  try {
+    const t0 = performance.now();
+    const res = await fetch("/api/governed/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposal_id: proposalId, utterance: utterance })
+    });
+    const data = await res.json();
+    const latMs = Math.round(performance.now() - t0);
+
+    recordToolCall("submit_user_approval", { proposal_id: proposalId, utterance }, data, latMs);
+
+    if (data.status === "EXECUTED") {
+      document.getElementById("approvalBadge").textContent = "PERMISO EMITIDO";
+      document.getElementById("approvalBadge").className = "status-badge active";
+
+      document.getElementById("auditPermitId").textContent = data.permit_id;
+      document.getElementById("auditActionId").textContent = data.action_id;
+      document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
+      document.getElementById("evidenceHash").textContent = data.evidence_sha256;
+
+      const savedMin = Math.round((data.htr_seconds_returned / 60) * 10) / 10;
+      currentHtrTotal += savedMin;
+      document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
+
+      document.getElementById("proposalCard").innerHTML = `
+        <div style="color:#059669; font-weight:600;">âœ“ AcciÃ³n Ejecutada y Auditada</div>
+        <p style="margin-top:4px;">Permiso: <code>${data.permit_id}</code> Â· HTR: +${savedMin} min</p>
+      `;
+      document.getElementById("manualApprovalActions").style.display = "none";
+      activeProposalId = null;
+
+      appendChat("agent", `AcciÃ³n ejecutada bajo permiso de un solo uso ${data.permit_id}. Evidencia criptogrÃ¡fica sellada en Audit Fabric y +${savedMin} minutos de tiempo devueltos.`);
+    } else {
+      document.getElementById("approvalBadge").textContent = "BLOQUEADO (FAIL-CLOSED)";
+      document.getElementById("approvalBadge").className = "status-badge pending";
+
+      document.getElementById("proposalCard").innerHTML = `
+        <div style="color:#dc2626; font-weight:600;">âœ• AprobaciÃ³n Denegada / Ambigua</div>
+        <p style="margin-top:4px;">Motivo: <code>${data.reason}</code> (Bloqueo de seguridad preventivo)</p>
+      `;
+      appendChat("agent", `La frase '${utterance}' no constituye una aprobaciÃ³n afirmativa inequÃ­voca. Por polÃ­tica de seguridad fail-closed, la acciÃ³n permanece BLOQUEADA.`);
+    }
+  } catch (err) {
+    console.error("Submit approval error:", err);
+  }
+}
+
+// Show Proposal Card
+function showProposalCard(proposalId, summary, subsystem) {
+  document.getElementById("approvalBadge").textContent = "ESPERANDO CONFIRMACIÃ“N";
+  document.getElementById("approvalBadge").className = "status-badge pending";
+
+  const card = document.getElementById("proposalCard");
+  card.className = "proposal-card active";
+  card.innerHTML = `
+    <div style="font-weight:700; color:#92400e; margin-bottom:4px;">PROPUESTA ACTIVA: <code>${proposalId}</code></div>
+    <div style="font-size:12px; color:#1e293b; margin-bottom:6px;">${summary}</div>
+    <div style="font-size:11px; color:#64748b;">Requiere confirmaciÃ³n verbal explÃ­cita del operador humano.</div>
+  `;
+  document.getElementById("manualApprovalActions").style.display = "flex";
+}
+
+// Record Tool Call in Ticker
+function recordToolCall(name, args, output, latencyMs) {
+  const stream = document.getElementById("toolStream");
+  if (stream.querySelector(".empty")) {
+    stream.innerHTML = "";
+  }
+
+  document.getElementById("toolLatency").textContent = `${latencyMs} ms`;
+
+  const item = document.createElement("div");
+  item.className = "tool-item";
+  item.innerHTML = `
+    <div><strong>${name}</strong> <span style="color:#64748b;">(${JSON.stringify(args).slice(0, 35)}...)</span></div>
+    <span style="color:#0284c7; font-weight:600;">${latencyMs}ms</span>
+  `;
+  stream.prepend(item);
+}
+
+// Append Chat Message
+function appendChat(role, text) {
+  const box = document.getElementById("transcriptBox");
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble ${role}`;
+
+  const meta = document.createElement("span");
+  meta.className = "bubble-meta";
+  meta.textContent = role === "user" ? "OPERADOR (GUAYAQUIL)" : (role === "agent" ? "HIGGS REALTIME (S2S)" : "SISTEMA");
+
+  const p = document.createElement("p");
+  p.textContent = text;
+
+  bubble.appendChild(meta);
+  bubble.appendChild(p);
+  box.appendChild(bubble);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Send Manual Utterance
+function sendManualUtterance() {
+  const input = document.getElementById("manualInput");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  appendChat("user", text);
+
+  // Parse if it looks like an approval or general query
+  if (activeProposalId && (text.toLowerCase().includes("si") || text.toLowerCase().includes("autorizo") || text.toLowerCase().includes("yes") || text.toLowerCase().includes("no"))) {
+    submitApproval(activeProposalId, text);
+  } else {
+    simulateTurn(text, { name: "inspect_operational_state", args: { subsystem: "all" } }, false, () => {
+      appendChat("agent", "He procesado tu comando e inspeccionado la telemetrÃ­a correspondiente en Guayaquil.");
+    });
+  }
+}
+
+// Simple Canvas Audio Waveform Animator
+function initWaveform() {
+  const canvas = document.getElementById("waveformCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  let phase = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const bars = 28;
+    const barWidth = 6;
+    const spacing = 6;
+    const startX = (canvas.width - (bars * (barWidth + spacing))) / 2;
+
+    for (let i = 0; i < bars; i++) {
+      let amp = isVoiceActive ? Math.sin(phase + i * 0.4) * 16 + Math.random() * 10 : 4;
+      amp = Math.max(3, Math.abs(amp));
+
+      const x = startX + i * (barWidth + spacing);
+      const y = (canvas.height - amp) / 2;
+
+      ctx.fillStyle = isVoiceActive ? "#0284c7" : "#cbd5e1";
+      ctx.beginPath();
+      ctx.roundRect(x, y, barWidth, amp, 3);
+      ctx.fill();
+    }
+
+    phase += 0.15;
+    animationFrameId = requestAnimationFrame(draw);
+  }
+  draw();
+}

@@ -1,185 +1,277 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#090f1a">
-  <title>InnerOS VoiceOps</title>
+  <meta name="theme-color" content="#ffffff">
+  <title>InnerOS VoiceOps â€” Higgs Realtime S2S (Boson AI)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <div class="app-frame">
-    <aside class="app-rail" aria-label="InnerOS application rail">
-      <div class="rail-brand" title="InnerOS">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 2.75 20 6.4v5.45c0 4.72-3.2 8.3-8 9.4-4.8-1.1-8-4.68-8-9.4V6.4L12 2.75Z"/>
-          <path d="M8.4 12.1 10.8 14.5 15.8 9.5"/>
-        </svg>
+<body class="light-theme">
+  <div class="app-layout">
+
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <div class="brand-text">
+            <span class="brand-title">InnerOS <strong>VoiceOps</strong></span>
+            <span class="brand-sub">Boson AI Â· Higgs Realtime S2S</span>
+          </div>
+        </div>
+        <div class="site-tag">
+          <span class="pulse-dot green"></span>
+          <span>Nodo Guayaquil (GYE-Node-01 Â· Ecuador)</span>
+        </div>
       </div>
-      <nav class="rail-nav" aria-label="VoiceOps sections">
-        <a href="#execution" class="rail-item active" aria-label="Execution" title="Execution">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v4h-7zM13 11h7v8h-7zM4 13h7v6H4z"/></svg>
-        </a>
-        <a href="#evidence" class="rail-item" aria-label="Evidence" title="Evidence">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l3 3v15H4V3h3Z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>
-        </a>
-      </nav>
-      <div class="rail-footer" title="Demo runtime healthy">
-        <span class="health-dot"></span>
+
+      <div class="header-center">
+        <div class="model-badge">
+          <span class="badge-label">MODELO S2S</span>
+          <span class="badge-val">Higgs Realtime v1 (&le;125ms Interruption)</span>
+        </div>
       </div>
-    </aside>
 
-    <main class="workspace">
-      <div class="shell">
-        <header class="topbar">
-          <div>
-            <div class="breadcrumb"><span>InnerOS</span><span>/</span><strong>VoiceOps</strong></div>
-            <h1>Governed voice execution</h1>
-            <p>Speak an intent. InnerOS turns it into controlled execution and proves what happened.</p>
-          </div>
-          <div class="header-meta">
-            <div class="meta-kicker">ASSEMBLYAI VOICE AGENT HACKATHON</div>
-            <div class="badges">
-              <span class="badge badge-local"><span class="badge-dot"></span>LOCAL-FIRST</span>
-              <span class="badge">DEMO ENVIRONMENT</span>
-              <span class="badge">NO PROD WRITES</span>
+      <div class="header-right">
+        <div class="governance-status">
+          <span class="shield-icon">ðŸ›¡ï¸</span>
+          <span>Fail-Closed Governance Active</span>
+        </div>
+        <span class="badge-pill">NO PROD WRITES</span>
+        <button id="refreshTelemetryBtn" class="btn btn-outline btn-sm">â†» Sincronizar TelemetrÃ­a</button>
+      </div>
+    </header>
+
+    <!-- Critical Alert Banner -->
+    <div id="alertBanner" class="alert-banner">
+      <div class="alert-content">
+        <span class="alert-badge">ALERTA EN VIVO</span>
+        <span id="alertMessage" class="alert-text">
+          Cargando telemetrÃ­a en tiempo real desde la infraestructura de Guayaquil...
+        </span>
+      </div>
+      <div class="alert-metrics">
+        <span class="metric-pill">Latencia S2S: <strong>~700ms</strong></span>
+        <span class="metric-pill">Barge-in: <strong>&le;125ms</strong></span>
+        <span class="metric-pill">PBX Port: <strong>UDP 4321</strong></span>
+      </div>
+    </div>
+
+    <!-- Main Workspace Container -->
+    <main class="main-content">
+
+      <!-- Interactive Voice & Control Bar -->
+      <section class="voice-hero card">
+        <div class="voice-hero-left">
+          <div class="voice-avatar-wrap">
+            <div id="voiceOrb" class="voice-orb idle">
+              <span class="orb-icon">ðŸŽ™ï¸</span>
+            </div>
+            <div class="voice-meta">
+              <h2 id="agentStateTitle">Higgs Realtime Despachador</h2>
+              <p id="agentStateSubtitle">Listo para recibir Ã³rdenes o telemetrÃ­a en EspaÃ±ol / InglÃ©s / Spanglish</p>
             </div>
           </div>
-        </header>
 
-        <section id="execution" class="controls card">
-          <div>
-            <div class="step-label">EXECUTION CONTROL</div>
-            <div id="demoStatus" class="status-line">Ready for an operational intent.</div>
+          <canvas id="waveformCanvas" class="waveform-canvas" width="340" height="48"></canvas>
+        </div>
+
+        <div class="voice-hero-controls">
+          <div class="btn-group">
+            <button id="liveMicBtn" class="btn btn-primary btn-lg">
+              <span class="icon">ðŸŽ™ï¸</span> Iniciar Voz en Vivo
+            </button>
+            <button id="stopMicBtn" class="btn btn-secondary btn-lg" disabled>
+              <span class="icon">â¹ï¸</span> Detener
+            </button>
           </div>
-          <div class="control-row">
-            <button id="liveVoiceBtn" class="primary"><span class="button-icon">●</span> Start live voice</button>
-            <button id="stopVoiceBtn" class="ghost" disabled>Stop voice</button>
-            <button id="runBtn" class="secondary">Run fixture</button>
-            <button id="approveBtn" class="approve" disabled>Yes, authorize</button>
-            <button id="ambiguousBtn" class="secondary" disabled>Ambiguous approval</button>
-            <button id="resetBtn" class="ghost">Reset</button>
+
+          <div class="scenario-shortcuts">
+            <span class="shortcuts-label">Escenarios de DemostraciÃ³n:</span>
+            <button class="pill-btn" onclick="triggerScenario('inspect')">1. DiagnÃ³stico Guayaquil</button>
+            <button class="pill-btn" onclick="triggerScenario('barge_in')">2. InterrupciÃ³n (&lt;125ms)</button>
+            <button class="pill-btn" onclick="triggerScenario('code_switch')">3. Spanglish TÃ©cnico</button>
+            <button class="pill-btn" onclick="triggerScenario('approve')">4. AprobaciÃ³n Permiso</button>
+            <button class="pill-btn" onclick="triggerScenario('reject')">5. Rechazo Fail-Closed</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3-Column Execution Dashboard -->
+      <div class="dashboard-grid">
+
+        <!-- Column 1: Subsystem Telemetry -->
+        <aside class="col-telemetry">
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>ðŸŽ›ï¸ TelemetrÃ­a del Sitio (Guayaquil)</h3>
+              <span class="badge-live">LIVE FEED</span>
+            </div>
+            <div class="subsystems-list">
+
+              <!-- Solar Card -->
+              <div class="subsystem-card" id="cardSolar">
+                <div class="subsystem-head">
+                  <span class="sub-icon">â˜€ï¸</span>
+                  <strong>EnergÃ­a Solar & BaterÃ­as</strong>
+                  <span class="status-indicator optimal">OPTIMAL</span>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>GeneraciÃ³n Solar:</span><strong id="solGen">3,840 W</strong></div>
+                  <div class="data-row"><span>BaterÃ­a:</span><strong id="solBat">94% (52.4V)</strong></div>
+                  <div class="data-row"><span>Red ElÃ©ctrica:</span><strong>224V / 60Hz GYE</strong></div>
+                </div>
+              </div>
+
+              <!-- Telephony Card -->
+              <div class="subsystem-card" id="cardTelephony">
+                <div class="subsystem-head">
+                  <span class="sub-icon">ðŸ“ž</span>
+                  <strong>TelefonÃ­a PBX Grandstream</strong>
+                  <span class="status-indicator optimal">OPTIMAL</span>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Hardware:</span><strong>UCM6104 (v1.0.20)</strong></div>
+                  <div class="data-row"><span>Extensiones:</span><strong id="telExts">4 Activas (100-103)</strong></div>
+                  <div class="data-row"><span>Troncal:</span><strong>SIP CNT Ecuador</strong></div>
+                </div>
+              </div>
+
+              <!-- WiFi / Network Card -->
+              <div class="subsystem-card alert" id="cardNetwork">
+                <div class="subsystem-head">
+                  <span class="sub-icon">ðŸ“¶</span>
+                  <strong>Red & Puntos de Acceso</strong>
+                  <span class="status-indicator warning">ALERTA</span>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Fibra WAN:</span><strong>1 Gbps (RTT 3.8ms)</strong></div>
+                  <div class="data-row"><span>AP-SolarYard:</span><strong class="text-danger">18% Packet Loss</strong></div>
+                  <div class="data-row"><span>LTE Respaldo:</span><strong>Claro LTE (Standby)</strong></div>
+                </div>
+              </div>
+
+              <!-- DMX Lighting Card -->
+              <div class="subsystem-card" id="cardDmx">
+                <div class="subsystem-head">
+                  <span class="sub-icon">ðŸ’¡</span>
+                  <strong>IluminaciÃ³n & DMX-512</strong>
+                  <span class="status-indicator optimal">STANDBY</span>
+                </div>
+                <div class="subsystem-body">
+                  <div class="data-row"><span>Protocolo:</span><strong>Art-Net Univ 1</strong></div>
+                  <div class="data-row"><span>PerÃ­metro:</span><strong>Auto-dusk 18:30</strong></div>
+                  <div class="data-row"><span>Balizas Emergencia:</span><strong>Canales 12-16 Ready</strong></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </aside>
+
+        <!-- Column 2: Dialogue & Mid-Conversation Tool Calls -->
+        <section class="col-conversation">
+          <div class="card panel flex-col flex-1">
+            <div class="panel-header">
+              <h3>ðŸ’¬ TranscripciÃ³n & Tool Calls en Tiempo Real</h3>
+              <span id="turnStatus" class="status-badge">Turno en Espera</span>
+            </div>
+
+            <div id="transcriptBox" class="transcript-box">
+              <div class="chat-bubble system">
+                <span class="bubble-meta">SISTEMA Â· INICIALIZADO</span>
+                <p>SesiÃ³n Higgs Realtime conectada. El despachador tiene acceso a las herramientas de telemetrÃ­a y ejecuciÃ³n gobernada para Guayaquil.</p>
+              </div>
+            </div>
+
+            <!-- Live Tool Call Ticker -->
+            <div class="tool-call-section">
+              <div class="tool-header">
+                <span class="tool-title">âš¡ Mid-Conversation Function Calling (Higgs &rarr; VoiceOps)</span>
+                <span id="toolLatency" class="tool-latency">0 ms</span>
+              </div>
+              <div id="toolStream" class="tool-stream">
+                <div class="tool-item empty">Las llamadas a funciones en vivo se mostrarÃ¡n aquÃ­ sin pausar la voz.</div>
+              </div>
+            </div>
+
+            <!-- Manual Input Box for Judging -->
+            <div class="chat-input-bar">
+              <input type="text" id="manualInput" placeholder="Escribe un comando por voz simulado (ej: 'Revisa el WiFi y reinicia el AP degradado')..." />
+              <button id="sendManualBtn" class="btn btn-primary">Enviar</button>
+            </div>
           </div>
         </section>
 
-        <section class="live-strip card">
-          <div class="live-summary">
-            <div class="step-label">ASSEMBLYAI LIVE STACK</div>
-            <strong id="voiceAgentStatus" class="live-status">OFFLINE / TOKEN NOT REQUESTED</strong>
-          </div>
-          <div class="capability-row">
-            <span class="capability">Voice Agent API</span>
-            <span class="capability">Neural turn detection</span>
-            <span class="capability">Barge-in</span>
-            <span class="capability">Native TTS</span>
-            <span class="capability">Tool calling</span>
-            <span class="capability">Short-lived token</span>
-          </div>
-          <div id="agentTranscript" class="agent-transcript">Agent voice transcript will appear here during a live session.</div>
-        </section>
+        <!-- Column 3: Safety Governance, Permit & HTR Receipt -->
+        <aside class="col-governance">
 
-        <section class="grid execution-grid">
-          <article class="card panel">
-            <div class="step-label">01 · VOICE</div>
-            <div class="panel-head">
-              <div class="panel-title-wrap">
-                <span class="panel-icon">A</span>
-                <h2>AssemblyAI input</h2>
-              </div>
-              <span id="voiceState" class="state">READY</span>
+          <!-- Active Proposal / Approval Card -->
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>ðŸ›¡ï¸ AprobaciÃ³n de Seguridad</h3>
+              <span id="approvalBadge" class="status-badge pending">SIN PROPUESTA</span>
             </div>
-            <div class="metric"><span>Streaming model</span><strong>Universal-3.5 Pro Realtime</strong></div>
-            <div class="metric"><span>Managed voice audio</span><strong>PCM16 · mono · 24 kHz</strong></div>
-            <div class="metric"><span>Custom STT lane</span><strong>PCM16 · mono · 16 kHz</strong></div>
-            <div class="transcript" id="transcript">No transcript yet.</div>
-            <div class="fineprint">Live mode uses AssemblyAI turn detection, partial/final transcripts, native TTS, interruption handling and governed tool calling. Fixture mode remains available for deterministic judging.</div>
-          </article>
 
-          <article class="card panel">
-            <div class="step-label">02 · OPERATIONAL CONTEXT</div>
-            <div class="panel-head">
-              <div class="panel-title-wrap">
-                <span class="panel-icon">G</span>
-                <h2>Guardian event</h2>
-              </div>
-              <span id="guardianState" class="state">WAITING</span>
+            <div id="proposalCard" class="proposal-card empty">
+              <p class="placeholder-text">Ninguna acciÃ³n propuesta requiere aprobaciÃ³n en este momento.</p>
             </div>
-            <div id="guardianEmpty" class="empty">No normalized incident received.</div>
-            <div id="guardianData" class="data-stack hidden"></div>
-          </article>
 
-          <article class="card panel">
-            <div class="step-label">03 · REASONING ROUTE</div>
-            <div class="panel-head">
-              <div class="panel-title-wrap">
-                <span class="panel-icon">R</span>
-                <h2 id="reasoningTitle">InnerOS reasoner</h2>
-              </div>
-              <span id="amdState" class="state">WAITING</span>
-            </div>
-            <div class="metric"><span>Provider</span><strong id="routeProvider">—</strong></div>
-            <div class="metric"><span>Model</span><strong id="routeModel">—</strong></div>
-            <div class="metric"><span>Policy</span><strong id="routePolicy">—</strong></div>
-            <div class="metric"><span>External fallback</span><strong id="routeFallback">—</strong></div>
-            <div class="metric"><span>Evidence class</span><strong id="routeTruth">—</strong></div>
-          </article>
-
-          <article class="card panel action-card">
-            <div class="step-label">04 · GOVERNED ACTION</div>
-            <div class="panel-head">
-              <div class="panel-title-wrap">
-                <span class="panel-icon">✓</span>
-                <h2>Action gate</h2>
-              </div>
-              <span id="actionState" class="state">WAITING</span>
-            </div>
-            <div id="proposalEmpty" class="empty">No action proposed.</div>
-            <div id="proposalData" class="data-stack hidden"></div>
-            <div id="approvalGate" class="approval-gate hidden">HUMAN APPROVAL REQUIRED</div>
-            <div id="actionResult" class="result hidden"></div>
-          </article>
-        </section>
-
-        <section id="evidence" class="card evidence-card">
-          <div class="evidence-head">
-            <div>
-              <div class="step-label">05 · DECISION EVIDENCE</div>
-              <h2>Forensic execution trace</h2>
-            </div>
-            <div class="ids">
-              <span>Session <code id="sessionId">—</code></span>
-              <span>Correlation <code id="correlationId">—</code></span>
+            <div class="approval-actions" id="manualApprovalActions" style="display:none;">
+              <button id="confirmBtn" class="btn btn-success btn-block">âœ“ Autorizar (Frase Afirmativa)</button>
+              <button id="rejectBtn" class="btn btn-danger btn-block">âœ• Rechazar / Ambigua (Fail-Closed)</button>
             </div>
           </div>
-          <div id="timeline" class="timeline"></div>
-          <div class="evidence-footer">
-            <div id="htrBox" class="htr">HTR appears after an approved action.</div>
-            <div class="control-row">
-              <button id="evidenceBtn" class="secondary">View evidence</button>
-              <button id="replayBtn" class="secondary">Replay decision</button>
+
+          <!-- Cryptographic Receipt Card -->
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>ðŸ“œ Recibo CriptogrÃ¡fico de AuditorÃ­a</h3>
+              <span class="badge-pill">SHA-256 SEALED</span>
+            </div>
+            <div class="audit-body">
+              <div class="data-row"><span>Permit ID:</span><code id="auditPermitId">vxp_none</code></div>
+              <div class="data-row"><span>Action ID:</span><code id="auditActionId">act_none</code></div>
+              <div class="data-row"><span>Firma Digital:</span><code id="auditSignature">[sealed_hmac_256]</code></div>
+              <div class="evidence-hash">
+                <span class="hash-label">Evidence SHA-256:</span>
+                <span id="evidenceHash" class="hash-val">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+              </div>
             </div>
           </div>
-        </section>
 
-        <footer class="product-footer">
-          <span>InnerOS VoiceOps</span>
-          <span>AssemblyAI voice layer · InnerOS governance · local-first execution</span>
-        </footer>
+          <!-- HTR Counter Card -->
+          <div class="card panel htr-card">
+            <div class="htr-header">
+              <span class="htr-kicker">HUMAN TIME RETURNED</span>
+              <span class="htr-class">MEASURED</span>
+            </div>
+            <div class="htr-value-wrap">
+              <span id="htrCounter" class="htr-number">+0.0</span>
+              <span class="htr-unit">minutos</span>
+            </div>
+            <p class="htr-desc">Tiempo humano ahorrado en despacho, diagnÃ³stico manual y maniobras de campo.</p>
+          </div>
+
+        </aside>
+
       </div>
     </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div>InnerOS VoiceOps Â· Boson AI Higgs Realtime S2S Hackathon 2026</div>
+      <div>Repositorio: <code>Rafa-Innerchispa/inneros-voiceops-one-day-2026</code> Â· Baseline: <code>pre-hackathon-2026-09-18</code></div>
+    </footer>
+
   </div>
 
-  <dialog id="jsonDialog">
-    <div class="dialog-head">
-      <div>
-        <div class="step-label">AUDIT DETAIL</div>
-        <strong id="dialogTitle">Evidence</strong>
-      </div>
-      <button id="closeDialog" class="ghost">Close</button>
-    </div>
-    <pre id="jsonOutput"></pre>
-  </dialog>
-
-  <script src="/app.js" defer></script>
+  <script src="/app.js"></script>
 </body>
 </html>
