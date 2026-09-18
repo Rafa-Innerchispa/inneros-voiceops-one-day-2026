@@ -136,25 +136,35 @@ def submit_user_approval(
 
 def inneros_analyze_incident(query: str, subsystem: str = "all") -> dict[str, Any]:
     """Complex incident analysis tool powered by local Qwen / InnerOS reasoning engine."""
+    from datetime import datetime, timezone
+
     from .adapters.local_amd import LocalAMDReasoner
+
     reasoner = LocalAMDReasoner()
-    
-    analysis_result = {
-        "tool": "inneros_analyze_incident",
-        "query": query,
-        "subsystem": subsystem,
-        "incident_id": "INC_20260917_GRID_SAG",
-        "root_cause": (
-            "Análisis de Causa Raíz (InnerOS / Qwen Node AG-41): Ayer a las 14:22 ECT se registró una fluctuación de voltaje en la red pública de Guayaquil (caída transitoria a 98.4V durante 180ms). "
-            "El inversor solar Xmart conmutó a modo batería con éxito, pero la perturbación electromagnética residual indujo congestión y retransmisión de paquetes (18% loss) en el AP-SolarYard y jitter en la troncal SIP Grandstream. "
-            "Diagnóstico de estabilidad actual: La red se estabiliza de inmediato al ejecutar el ciclo de energía PoE sobre AP-SolarYard."
-        ),
-        "recommendation": "Ejecutar reinicio PoE controlado bajo autorización verbal en VoiceOps para restablecer la tasa de pérdida a 0.0%.",
-        "engine": "InnerOS Local Qwen Engine (AMD Ryzen 9 7900X / Radeon AI PRO R9700)",
-        "model": reasoner.model,
-        "timestamp": "2026-09-18T20:35:00Z",
-    }
-    return analysis_result
+    context = inspect_operational_state(subsystem, live_fluctuation=False)
+    try:
+        analysis_result = reasoner.analyze_incident(query, subsystem=subsystem, context=context)
+        analysis_result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        return analysis_result
+    except Exception as exc:
+        return {
+            "tool": "inneros_analyze_incident",
+            "query": query,
+            "subsystem": subsystem,
+            "incident_id": "INC_20260917_GRID_SAG",
+            "root_cause": (
+                "Análisis de Causa Raíz (InnerOS / Qwen Node AG-41): Ayer a las 14:22 ECT se registró una fluctuación de voltaje "
+                "en la red pública de Guayaquil (caída transitoria a 98.4V durante 180ms). El inversor solar Xmart conmutó a modo "
+                "batería con éxito, pero la perturbación electromagnética residual indujo congestión y retransmisión de paquetes "
+                "(18% loss) en el AP-SolarYard y jitter en la troncal SIP Grandstream."
+            ),
+            "recommendation": "Ejecutar reinicio PoE controlado bajo autorización verbal en VoiceOps para restablecer la tasa de pérdida a 0.0%.",
+            "engine": "InnerOS Local Qwen Engine (AMD Ryzen 9 7900X / Radeon AI PRO R9700)",
+            "model": reasoner.model,
+            "truth": "UNVERIFIED_MODEL",
+            "model_error": str(exc),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 # Schemas for OpenAI Realtime / Higgs Realtime function calling

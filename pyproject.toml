@@ -15,6 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 assemblyai = ["assemblyai>=1.0.0"]
 microphone = ["assemblyai>=1.0.0", "pyaudio>=0.2.14"]
+boson = ["websocket-client>=1.8.0"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]

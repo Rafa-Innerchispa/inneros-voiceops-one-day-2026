@@ -487,16 +487,23 @@ class HiggsRealtimeSession:
                 else f"Dahua Video Surveillance on {nvr} is live streaming 30 FPS feeds on channels {ch_desc}. Physical Guardian VideoMotion dispatcher is actively tracking perimeter movement."
             )
         elif target_sub == "solar_power":
-            watts = data.get("solar_generation_watts", 529)
-            bat = data.get("battery_charge_pct", 100)
-            grid_v = data.get("grid_voltage_volts", 120.6)
-            amps = data.get("phase_a_current_amps", 6.11)
-            pwr = data.get("phase_a_power_watts", 593)
-            reply = (
-                f"El arreglo solar está generando {watts} watts con batería al {bat}% en modo de carga solar. El voltaje de red en la fase A registra {grid_v} voltios, {amps} amperios y {pwr} watts de consumo."
-                if is_spanish
-                else f"Solar array is generating {watts} watts with battery at {bat}% capacity in solar charging mode. Main breaker grid is reading {grid_v} volts, {amps} amps, and {pwr} watts."
-            )
+            watts = data.get("solar_generation_watts")
+            bat = data.get("battery_charge_pct")
+            grid_v = data.get("grid_voltage_volts")
+            amps = data.get("phase_a_current_amps")
+            pwr = data.get("phase_a_power_watts")
+            if watts is None and bat is None and grid_v is None:
+                reply = (
+                    "La telemetría solar no está verificada en vivo desde Home Assistant. Conecta HASS_URL y HASS_TOKEN para leer la salida AC del inversor."
+                    if is_spanish
+                    else "Solar telemetry is not live-verified from Home Assistant. Configure HASS_URL and HASS_TOKEN to read inverter AC output."
+                )
+            else:
+                reply = (
+                    f"La salida AC del inversor registra {watts} watts con batería a {bat}% y {grid_v} voltios de red en fase A ({amps} A, {pwr} W)."
+                    if is_spanish
+                    else f"Inverter AC output reads {watts} watts with battery at {bat}% and grid phase A at {grid_v} volts ({amps} A, {pwr} W)."
+                )
         elif target_sub == "telephony":
             exts = [e.get("ext") for e in data.get("registered_extensions", [])]
             exts_str = ", ".join(exts) if exts else "activas"

@@ -30,12 +30,16 @@ def test_truth_retrofit_individual_inspection_metadata() -> None:
     assert sol["subsystem"] == "solar_power"
     assert "truth" in sol
     assert "source_provider" in sol
-    assert sol["data"]["solar_generation_watts"] == 529
-    assert sol["data"]["battery_charge_pct"] == 100.0
+    assert "solar_generation_watts" in sol["data"]
+    assert "ac_output_power_watts" in sol["data"]
+    if sol["truth"] == "LIVE":
+        assert sol["data"]["solar_generation_watts"] is not None
+    else:
+        assert sol["truth"] == "UNVERIFIED"
 
     alm = inspect_operational_state("security_alarm")
     assert alm["subsystem"] == "security_alarm"
-    assert alm["truth"] == "LIVE"
+    assert alm["truth"] in {"LIVE", "UNVERIFIED"}
     assert alm["data"]["monitored_zones_count"] == 10
 
     cam = inspect_operational_state("video_surveillance")
@@ -73,7 +77,8 @@ def test_instacloud_non_blocking_provider() -> None:
 
     status = insta.get_status()
     assert status["provider"] == "instacloud"
-    assert status["status"] == "disabled_or_unconfigured"
+    assert status["status"] == "NOT_CONNECTED"
+    assert status["truth"] == "NOT_CONNECTED"
     assert status["local_canonical"] is True
 
     plan = insta.plan_deploy()

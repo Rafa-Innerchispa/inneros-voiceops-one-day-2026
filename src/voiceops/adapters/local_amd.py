@@ -113,6 +113,49 @@ class LocalAMDReasoner:
             },
         )
 
+    def analyze_incident(self, query: str, *, subsystem: str = "all", context: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Root-cause style incident analysis via local Qwen runtime."""
+        request_payload = {
+            "model": self.model,
+            "temperature": 0.2,
+            "max_tokens": 420,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are InnerOS incident analysis on Node AG-41 in Guayaquil. "
+                        "Return ONLY JSON with keys: incident_id, root_cause, recommendation. "
+                        "root_cause must mention grid/solar/network/telephony context when relevant."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "query": query,
+                            "subsystem": subsystem,
+                            "operational_context": context or {},
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+        }
+        response = self._post_json(self.endpoint, request_payload, self.timeout_seconds)
+        content = _extract_content(response)
+        parsed = _extract_incident_payload(content)
+        return {
+            "tool": "inneros_analyze_incident",
+            "query": query,
+            "subsystem": subsystem,
+            "incident_id": parsed.get("incident_id", "INC_UNVERIFIED"),
+            "root_cause": parsed.get("root_cause", content),
+            "recommendation": parsed.get("recommendation", "Review live telemetry and propose governed remediation."),
+            "engine": "InnerOS Local Qwen Engine (AMD Ryzen 9 7900X / Radeon AI PRO R9700)",
+            "model": self.model,
+            "truth": "LIVE_MODEL_RESPONSE",
+        }
+
 
 def _post_json(endpoint: str, payload: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:
     request = Request(
@@ -136,6 +179,29 @@ def _extract_content(response: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise ValueError("local AMD response content must be non-empty text")
     return content.strip()
+
+
+def _extract_incident_payload(content: str) -> dict[str, str]:
+    cleaned = content.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {"root_cause": cleaned}
+    if not isinstance(payload, dict):
+        return {"root_cause": cleaned}
+    out: dict[str, str] = {}
+    for key in ("incident_id", "root_cause", "recommendation"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+    return out
 
 
 def _extract_summary(content: str) -> str | None:

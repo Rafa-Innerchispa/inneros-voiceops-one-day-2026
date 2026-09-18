@@ -71,37 +71,86 @@ class OperationalStateRegistry:
         force_mode: str | None = None,
     ) -> dict[str, Any]:
         """Returns verified operational telemetry with explicit provenance and truth contracts."""
-        ami_host = os.getenv("VOICEOPS_TELEPHONY_AMI_HOST", "").strip()
-        hass_url = os.getenv("HASS_URL", "").strip()
+        from .adapters.live_ha_provider import fetch_ha_snapshot
+        from .adapters.live_telephony_provider import fetch_ami_telephony_snapshot
+
+        ha_snapshot = fetch_ha_snapshot()
+        ami_snapshot = fetch_ami_telephony_snapshot()
+        ha_readings = ha_snapshot.get("readings") if isinstance(ha_snapshot.get("readings"), dict) else {}
+
+        def _reading_float(label: str) -> float | None:
+            row = ha_readings.get(label, {})
+            if not isinstance(row, dict):
+                return None
+            state = row.get("state")
+            try:
+                return float(state)
+            except (TypeError, ValueError):
+                return None
+
+        def _reading_text(label: str) -> str | None:
+            row = ha_readings.get(label, {})
+            if not isinstance(row, dict):
+                return None
+            state = row.get("state")
+            return str(state) if state is not None else None
 
         # 1. Telephony Provider
-        tel_truth = "LIVE"
-        tel_provider = f"Grandstream AMI TCP 7777 ({ami_host})" if ami_host else "Grandstream UCM6104 (UDP 4321 / TCP 7777 AMI)"
-        tel_status = "ONLINE"
+        if ami_snapshot.get("truth") == "LIVE":
+            tel_truth = "LIVE"
+            tel_provider = str(ami_snapshot.get("source_provider"))
+            tel_status = "ONLINE" if ami_snapshot.get("registered_extensions") else "NO_PEERS"
+            registered_extensions = list(ami_snapshot.get("registered_extensions") or [])
+        else:
+            tel_truth = "UNVERIFIED"
+            tel_provider = str(ami_snapshot.get("source_provider") or "Grandstream UCM6104 (UDP 4321 / TCP 7777 AMI)")
+            tel_status = "UNVERIFIED"
+            registered_extensions = list(self._registered_extensions)
 
         # 2. Solar & Energy Provider
-        solar_truth = "LIVE"
-        solar_provider = "Home Assistant Core REST API" if hass_url else "Home Assistant / Xmart Inverter (Node AG-41)"
-        solar_status = "HEALTHY"
+        solar_truth = str(ha_snapshot.get("truth") or "UNVERIFIED")
+        solar_provider = str(ha_snapshot.get("source_provider") or "Home Assistant / Xmart Inverter (Node AG-41)")
+        solar_status = "HEALTHY" if solar_truth == "LIVE" else "UNVERIFIED"
+        solar_generation = _reading_float("solar_output_power")
+        battery_charge = _reading_float("solar_battery_capacity")
+        battery_voltage = _reading_float("solar_battery_voltage")
+        pv_voltage = _reading_float("solar_pv_voltage")
+        grid_voltage = _reading_float("solar_grid_voltage")
+        phase_a_current = _reading_float("breaker_current")
+        phase_a_power = _reading_float("breaker_power")
+        breaker_voltage = _reading_float("breaker_voltage")
+        inferred_mode = _reading_text("solar_mode") or "unknown"
+
+        value_source = "home_assistant_live" if solar_truth == "LIVE" else "unavailable"
+        if phase_a_power is not None and phase_a_power < 50:
+            # Home Assistant breaker sensor reports kW on this site.
+            phase_a_power = round(phase_a_power * 1000.0, 1)
 
         # 3. Network Provider
-        net_truth = "LIVE"
+        unifi_wan = _reading_text("unifi_wan")
+        unifi_cpu = _reading_float("unifi_cpu")
+        net_truth = "LIVE" if unifi_wan is not None or unifi_cpu is not None else "UNVERIFIED"
         net_provider = "UniFi Dream Machine & Cloud Gateway Ultra"
         net_status = "ALERT_ACTIVE" if self._ap_solaryard_degraded else "OPTIMAL"
         ap_yard_status = "DEGRADED (18% packet loss, channel interference detected)" if self._ap_solaryard_degraded else "OPTIMAL (0.0% packet loss, PoE power-cycled)"
+
+        alarm_state = _reading_text("alarm_panel")
+        security_truth = "LIVE" if alarm_state is not None else "UNVERIFIED"
+        security_status = f"ALARM_{alarm_state.upper()}" if alarm_state else "UNVERIFIED"
 
         telemetry_map: dict[str, Any] = {
             "telephony": {
                 "subsystem": "telephony",
                 "source_provider": tel_provider,
                 "truth": force_mode or tel_truth,
-                "observed_at": _now_iso(),
-                "freshness_seconds": 0.2,
+                "observed_at": ami_snapshot.get("observed_at") or _now_iso(),
+                "freshness_seconds": ami_snapshot.get("freshness_seconds"),
                 "location": "Guayaquil Node - Grandstream UCM6104 PBX",
                 "status": tel_status,
                 "hardware": "Grandstream UCM6104 (Firmware 1.0.20.48)",
                 "sip_bind": "UDP 4321 / G.711u / PCM16 mono 16kHz",
-                "registered_extensions": list(self._registered_extensions),
+                "registered_extensions": registered_extensions,
+                "ami_error": ami_snapshot.get("error"),
                 "active_trunk": "VoIP SIP Trunk - CNT Ecuador Telecom (E.164 Gov Policy)",
                 "trunk_quality": {"jitter_ms": 2.1, "packet_loss_pct": 0.0, "mos_score": 4.38},
                 "policy_mode": "Strict Ecuador PSTN whitelist + fail-closed internal extension routing",
@@ -110,31 +159,35 @@ class OperationalStateRegistry:
                 "subsystem": "solar_power",
                 "source_provider": solar_provider,
                 "truth": force_mode or solar_truth,
-                "observed_at": _now_iso(),
-                "freshness_seconds": 0.5,
+                "observed_at": ha_snapshot.get("observed_at") or _now_iso(),
+                "freshness_seconds": ha_snapshot.get("freshness_seconds"),
                 "location": "Guayaquil Solar Array & Battery Storage Bank 1",
                 "status": solar_status,
                 "inverter_model": "Xmart XSI-BB-120-3K-24-MPP / Growatt Hybrid (120V / 60Hz)",
-                "solar_generation_watts": 529,
-                "pv_voltage_volts": 65.7,
-                "battery_charge_pct": 100.0,
-                "battery_voltage_volts": 52.4,
+                "ac_output_power_watts": solar_generation,
+                "solar_generation_watts": solar_generation,
+                "measurement_note": "sensor.inneros_pi01_solar_output_power is inverter AC output, not PV generation",
+                "value_source": value_source,
+                "pv_voltage_volts": pv_voltage,
+                "battery_charge_pct": battery_charge,
+                "battery_voltage_volts": battery_voltage,
                 "battery_temperature_c": 41.0,
-                "grid_voltage_volts": 120.6,
-                "grid_synchronization": "CONNECTED (120.6V / 60Hz Guayaquil Grid)",
-                "phase_a_current_amps": 6.11,
-                "phase_a_power_watts": 593,
-                "inferred_mode": "utility_present_solar_charging",
+                "grid_voltage_volts": grid_voltage,
+                "grid_synchronization": f"CONNECTED ({grid_voltage}V / 60Hz Guayaquil Grid)",
+                "phase_a_current_amps": phase_a_current,
+                "phase_a_power_watts": phase_a_power,
+                "inferred_mode": inferred_mode,
                 "daily_yield_kwh": 18.64,
+                "ha_errors": ha_snapshot.get("errors") or [],
             },
             "security_alarm": {
                 "subsystem": "security_alarm",
                 "source_provider": "Home Assistant / Intelbras Guardian API",
-                "truth": force_mode or "LIVE",
-                "observed_at": _now_iso(),
-                "freshness_seconds": 0.3,
+                "truth": force_mode or security_truth,
+                "observed_at": ha_snapshot.get("observed_at") or _now_iso(),
+                "freshness_seconds": ha_snapshot.get("freshness_seconds"),
                 "location": "Guayaquil Facility Perimeter & Control Vault",
-                "status": "DISARMED_OPTIMAL",
+                "status": security_status,
                 "panel_model": "Intelbras AMT / Home Ralphi Security Hub",
                 "partition": "Panel Home Ralphi (Partition 0)",
                 "device_id": 602518,
@@ -171,12 +224,14 @@ class OperationalStateRegistry:
             },
             "network_wifi": {
                 "subsystem": "network_wifi",
-                "source_provider": "UniFi Dream Machine & Cloud Gateway Ultra",
-                "truth": force_mode or "LIVE",
-                "observed_at": _now_iso(),
-                "freshness_seconds": 0.4,
+                "source_provider": net_provider,
+                "truth": force_mode or net_truth,
+                "observed_at": ha_snapshot.get("observed_at") or _now_iso(),
+                "freshness_seconds": ha_snapshot.get("freshness_seconds"),
                 "location": "Guayaquil Field Operations Backbone",
                 "status": net_status,
+                "unifi_wan_status": unifi_wan,
+                "unifi_cpu_utilization_pct": unifi_cpu,
                 "primary_wan": "1.0 Gbps Fiber (Telconet GYE) - UniFi UDM WAN Online",
                 "backup_wan": "Claro LTE Emergency Cellular Backup (Standby)",
                 "access_points": [

@@ -28,6 +28,12 @@ let animationFrameId = null;
 
 let higgsWebSocket = null;
 let ephemeralToken = null;
+let bosonTransportMode = "browser_fallback";
+let audioSource = "BROWSER_TTS_FALLBACK";
+let higgsPcmActive = false;
+let browserFallbackLabeled = false;
+let ttsBargeInGuardUntil = 0;
+let lastSpokenTranscript = "";
 let activeAudioSources = [];
 let audioContext = null;
 let micStream = null;
@@ -45,6 +51,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (htrEl) htrEl.textContent = `+${currentHtrTotal.toFixed(1)}`;
   fetchTelemetry();
   fetchBosonStatus();
+  fetchIntegrationsStatus();
+  setAudioSource("BROWSER_TTS_FALLBACK");
 
   // Continuously poll live telemetry every 2 seconds for real-time sensor updates
   setInterval(fetchTelemetry, 2000);
@@ -118,12 +126,35 @@ function initVoiceProfiles() {
   });
 }
 
-// Speak text clearly using SpeechSynthesis + Web Audio fallback
-function speakText(text) {
+function setAudioSource(source) {
+  audioSource = source;
+  const badge = document.getElementById("audioSourceBadge");
+  if (badge) {
+    badge.textContent = `AUDIO_SOURCE: ${source}`;
+    badge.className = source === "HIGGS" ? "badge-pill active" : "badge-pill";
+  }
+}
+
+// Speak text clearly using SpeechSynthesis (BROWSER TTS FALLBACK when Boson relay unavailable)
+async function speakText(text, options = {}) {
   if (!text || !window.speechSynthesis) return;
+  if (higgsPcmActive && bosonTransportMode === "higgs_relay" && options.fallback !== true) {
+    return;
+  }
+
+  setAudioSource(bosonTransportMode === "higgs_relay" && higgsPcmActive ? "HIGGS" : "BROWSER_TTS_FALLBACK");
+  if (audioSource === "BROWSER_TTS_FALLBACK" && !browserFallbackLabeled) {
+    browserFallbackLabeled = true;
+    appendChat("system", "BROWSER TTS FALLBACK — using browser speechSynthesis for audible output.");
+  }
 
   try {
+    if (audioContext && audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+    ttsBargeInGuardUntil = Date.now() + 1800;
     window.speechSynthesis.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 80));
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
@@ -202,13 +233,18 @@ function initSpeechRecognition() {
   rec.lang = "es-EC";
 
   rec.onresult = (event) => {
+    if (bosonTransportMode === "higgs_relay") {
+      return;
+    }
     const lastIndex = event.results.length - 1;
     const transcript = event.results[lastIndex][0].transcript.trim();
-    if (transcript && transcript.length > 1) {
-      console.log("🎤 Voice recognized:", transcript);
-      appendChat("user", transcript);
-      processSpokenCommand(transcript);
+    if (!transcript || transcript.length <= 1 || transcript === lastSpokenTranscript) {
+      return;
     }
+    lastSpokenTranscript = transcript;
+    console.log("🎤 Voice recognized:", transcript);
+    appendChat("user", transcript);
+    processSpokenCommand(transcript);
   };
 
   rec.onerror = (err) => {
@@ -232,10 +268,21 @@ async function initBosonSession() {
     const res = await fetch("/api/boson/token");
     if (!res.ok) throw new Error("Could not mint ephemeral token");
     const data = await res.json();
+    bosonTransportMode = data.mode || (data.token ? "higgs_relay" : "browser_fallback");
+
+    if (bosonTransportMode === "browser_fallback" || !data.token || !data.ws_url) {
+      bosonTransportMode = "browser_fallback";
+      setAudioSource("BROWSER_TTS_FALLBACK");
+      appendChat("system", data.label || "BROWSER TTS FALLBACK — using browser SpeechRecognition + speechSynthesis.");
+      setExecutionStep("Browser Voice Fallback", data.reason || "Boson relay not configured on server.");
+      return;
+    }
+    setAudioSource("HIGGS");
+
     ephemeralToken = data.token;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}${data.ws_url || "/ws/higgs"}`;
+    const wsUrl = `${protocol}//${window.location.host}${data.ws_url}?token=${encodeURIComponent(data.token)}`;
 
     higgsWebSocket = new WebSocket(wsUrl);
 
@@ -259,8 +306,15 @@ async function initBosonSession() {
 
     higgsWebSocket.onclose = () => {
       console.log("Higgs WebSocket connection closed");
+      if (isVoiceActive && bosonTransportMode === "higgs_relay") {
+        bosonTransportMode = "browser_fallback";
+        setAudioSource("BROWSER_TTS_FALLBACK");
+        appendChat("system", "Higgs relay closed — falling back to browser STT/TTS.");
+      }
     };
   } catch (err) {
+    bosonTransportMode = "browser_fallback";
+    setAudioSource("BROWSER_TTS_FALLBACK");
     console.warn("Ephemeral token negotiation notice:", err);
   }
 }
@@ -278,7 +332,12 @@ function handleHiggsServerEvent(event) {
     if (text) {
       appendChat("agent", text);
       setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-      speakText(text);
+      if (!higgsPcmActive) {
+        clearTimeout(window.__higgsTranscriptSpeakTimer);
+        window.__higgsTranscriptSpeakTimer = setTimeout(() => {
+          if (!higgsPcmActive) speakText(text, { fallback: true });
+        }, 450);
+      }
     }
     if (event.tool_records && event.tool_records.length > 0) {
       event.tool_records.forEach((rec) => {
@@ -299,17 +358,28 @@ function handleHiggsServerEvent(event) {
     // Real PCM16 binary audio streaming to Web Audio API buffer queue
     const base64Audio = event.delta || "";
     if (base64Audio) {
+      higgsPcmActive = true;
+      setAudioSource("HIGGS");
       playPCM16AudioChunk(base64Audio);
     }
+  } else if (type === "response.audio.done" || type === "response.done") {
+    higgsPcmActive = false;
   } else if (type === "input_audio_buffer.speech_started") {
+    higgsPcmActive = false;
     cancelAllAudioPlayback();
+  } else if (type === "error" && event.mode === "browser_fallback") {
+    bosonTransportMode = "browser_fallback";
+    appendChat("system", event.label || "BROWSER TTS FALLBACK");
   }
 }
 
 // Web Audio API: Play PCM16 Mono 16kHz audio chunk through hardware destination
-function playPCM16AudioChunk(base64Data) {
+async function playPCM16AudioChunk(base64Data) {
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
   }
 
   try {
@@ -422,8 +492,12 @@ async function startLiveVoice() {
       }
       const avg = sum / inputData.length;
 
-      // Realtime Hardware VAD: If user speaks while agent audio is streaming, interrupt immediately!
-      if (avg > 0.05 && isAudioSpeaking) {
+      // Realtime Hardware VAD: ignore echo bleed right after TTS starts.
+      if (Date.now() < ttsBargeInGuardUntil) {
+        return;
+      }
+      const vadThreshold = audioSource === "BROWSER_TTS_FALLBACK" ? 0.12 : 0.05;
+      if (avg > vadThreshold && isAudioSpeaking) {
         triggerInstantBargeIn();
       }
 
@@ -443,14 +517,21 @@ async function startLiveVoice() {
       }
     };
 
-    // Start Web Speech Recognition
-    if (!recognition) {
-      recognition = initSpeechRecognition();
-    }
-    if (recognition) {
-      try {
-        recognition.start();
-      } catch (e) {}
+    // Connect Boson transport before deciding STT path.
+    await initBosonSession();
+
+    // Browser STT for fallback; Higgs relay uses PCM upstream only.
+    if (bosonTransportMode !== "higgs_relay") {
+      bosonTransportMode = "browser_fallback";
+      setAudioSource("BROWSER_TTS_FALLBACK");
+      if (!recognition) {
+        recognition = initSpeechRecognition();
+      }
+      if (recognition) {
+        try {
+          recognition.start();
+        } catch (e) {}
+      }
     }
 
     isVoiceActive = true;
@@ -465,13 +546,10 @@ async function startLiveVoice() {
     setExecutionStep("Microphone Live", "Listening to your voice. Speak any operational command or query...");
     appendChat("system", "Microphone PCM16 stream connected to Boson AI Higgs Realtime. Speak freely.");
 
-    // Connect WebSocket
-    await initBosonSession();
-
-    // Spoken greeting
+    // Spoken greeting (always audible via current audio source)
     const greetingText = "Hi, I'm here to help you. VoiceOps is online and monitoring all Guayaquil systems.";
     appendChat("agent", greetingText);
-    speakText(greetingText);
+    await speakText(greetingText, { fallback: true });
   } catch (err) {
     console.error("Microphone access error:", err);
     alert("Microphone permission was not granted. Please allow microphone access in your browser to test live speech.");
@@ -523,7 +601,7 @@ function stopLiveVoice() {
 
 // Process spoken/typed command through Boson AI reasoning engine
 async function processSpokenCommand(text) {
-  if (isAudioSpeaking) {
+  if (isAudioSpeaking && Date.now() >= ttsBargeInGuardUntil) {
     triggerInstantBargeIn();
   }
 
@@ -574,7 +652,7 @@ async function processSpokenCommand(text) {
     const reply = data.reply || "Operational query processed.";
     appendChat("agent", reply);
     setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-    speakText(reply);
+    speakText(reply, { fallback: true });
 
     if (data.subsystem) {
       highlightDashboardCard(data.subsystem);
@@ -676,9 +754,17 @@ async function fetchTelemetry() {
         const solGen = document.getElementById("solGen");
         const solBat = document.getElementById("solBat");
         const solGrid = document.getElementById("solGrid");
-        if (solGen) solGen.textContent = `${sol.solar_generation_watts || 529} W`;
-        if (solBat) solBat.textContent = `${sol.battery_charge_pct || 100}% (${sol.battery_voltage_volts || 52.4}V)`;
-        if (solGrid) solGrid.textContent = `${sol.grid_voltage_volts || 120.6}V / 60Hz Guayaquil Grid`;
+        if (solGen) {
+          solGen.textContent = sol.solar_generation_watts != null ? `${sol.solar_generation_watts} W` : "—";
+        }
+        if (solBat) {
+          const batPct = sol.battery_charge_pct != null ? `${sol.battery_charge_pct}%` : "—";
+          const batV = sol.battery_voltage_volts != null ? `${sol.battery_voltage_volts}V` : "—";
+          solBat.textContent = `${batPct} (${batV})`;
+        }
+        if (solGrid) {
+          solGrid.textContent = sol.grid_voltage_volts != null ? `${sol.grid_voltage_volts}V / 60Hz Guayaquil Grid` : "—";
+        }
       }
 
       // 2. Telephony Subsystem
@@ -742,8 +828,25 @@ async function fetchBosonStatus() {
     if (!res.ok) return;
     const data = await res.json();
     console.log("Boson AI Higgs Realtime Status:", data);
+    if (data.mode === "browser_fallback") {
+      setAudioSource("BROWSER_TTS_FALLBACK");
+    }
   } catch (err) {
     console.error("Boson status check error:", err);
+  }
+}
+
+async function fetchIntegrationsStatus() {
+  try {
+    const res = await fetch("/api/integrations/status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.audio_source) {
+      setAudioSource(data.audio_source);
+    }
+    console.log("Integration status:", data);
+  } catch (err) {
+    console.error("Integration status error:", err);
   }
 }
 
@@ -940,13 +1043,14 @@ function initWaveform() {
       analyserNode.getByteFrequencyData(micDataArray);
 
       // Hardware VAD: If microphone receives human speech volume while agent is speaking, interrupt immediately!
-      if (isAudioSpeaking) {
+      if (isAudioSpeaking && Date.now() >= ttsBargeInGuardUntil) {
         let sum = 0;
         for (let k = 0; k < micDataArray.length; k++) {
           sum += micDataArray[k];
         }
         const avg = sum / micDataArray.length;
-        if (avg > 20) {
+        const vadThreshold = audioSource === "BROWSER_TTS_FALLBACK" ? 45 : 20;
+        if (avg > vadThreshold) {
           triggerInstantBargeIn();
         }
       }

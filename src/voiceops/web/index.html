@@ -46,6 +46,7 @@
           <span>Fail-Closed Governance Active</span>
         </div>
         <span class="badge-pill">NO PROD WRITES</span>
+        <span id="audioSourceBadge" class="badge-pill">AUDIO_SOURCE: UNKNOWN</span>
         <button id="refreshTelemetryBtn" class="btn btn-outline btn-sm">Sync Telemetry</button>
       </div>
     </header>
@@ -157,7 +158,7 @@
                   </div>
                 </div>
                 <div class="subsystem-body">
-                  <div class="data-row"><span>PV Generation:</span><strong id="solGen">529 W</strong></div>
+                  <div class="data-row"><span>AC Output (Inverter):</span><strong id="solGen">—</strong></div>
                   <div class="data-row"><span>Battery Bank:</span><strong id="solBat">100% (52.4V)</strong></div>
                   <div class="data-row"><span>Grid Sync:</span><strong id="solGrid">120.6V / 60Hz Guayaquil Grid</strong></div>
                   <div class="provider-sub" id="solProvider">Source: Home Assistant Core / Xmart Inverter (Node AG-41)</div>

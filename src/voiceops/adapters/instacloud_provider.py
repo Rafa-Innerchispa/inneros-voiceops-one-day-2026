@@ -22,19 +22,24 @@ class InstaCloudProvider:
         return self.enabled and bool(self.api_key)
 
     def get_status(self) -> dict[str, Any]:
-        """Returns the preview deployment status on InstaCloud."""
+        """Returns honest InstaCloud status — no fabricated remote deployment."""
         if not self.is_available():
             return {
                 "provider": "instacloud",
-                "status": "disabled_or_unconfigured",
+                "status": "NOT_CONNECTED",
+                "truth": "NOT_CONNECTED",
                 "preview_url": None,
                 "local_canonical": True,
+                "note": "InstaCloud adapter skeleton only; no remote deploy probe configured.",
             }
         return {
             "provider": "instacloud",
-            "status": "READY",
+            "status": "NOT_CONNECTED",
+            "truth": "NOT_CONNECTED",
             "project_id": self.project_id,
-            "preview_url": f"https://{self.project_id}.preview.instacloud.app",
+            "preview_url": None,
+            "local_canonical": True,
+            "note": "Credentials present but remote InstaCloud deploy API is not wired yet.",
             "observed_at": datetime.now(timezone.utc).isoformat(),
         }
 
