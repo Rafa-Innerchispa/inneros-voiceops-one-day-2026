@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import copy
 import hashlib
@@ -79,7 +79,7 @@ class OperationalStateRegistry:
                     },
                     {"ap_id": "AP-TelecomVault", "band": "5GHz / WiFi 6", "clients": 6, "status": "OPTIMAL"},
                 ],
-                "core_switch": "MikroTik CRS328-24P-4S+ (CPU: 8%, Temp: 38.2Â°C, PoE Load: 68W)",
+                "core_switch": "MikroTik CRS328-24P-4S+ (CPU: 8%, Temp: 38.2°C, PoE Load: 68W)",
             },
             "dmx_lighting": {
                 "subsystem": "dmx_lighting",
