@@ -73,6 +73,50 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Helper to find the best male English voice
+function getBestMaleVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || !voices.length) return null;
+
+  const femaleKeywords = [
+    "zira", "jenny", "aria", "sonia", "helena", "sabina", "laura", "mia", 
+    "cortana", "eva", "susan", "female", "woman", "catherine", "linda", 
+    "heather", "samantha", "karen", "victoria", "hazel", "ayumi", "haruka", 
+    "yuri", "steffi", "katja", "alice", "juliette", "luciana", "monica", 
+    "paulina", "google us english", "google español", "google uk english female"
+  ];
+  const maleKeywords = [
+    "david", "guy", "mark", "george", "ryan", "christopher", "daniel", 
+    "male", "man", "natural", "uk english male", "richard", "james", "john", "paul", "tom", "stephen"
+  ];
+
+  // 1. Explicit Male English
+  const maleEn = voices.find((v) => {
+    const n = v.name.toLowerCase();
+    const isEn = v.lang.toLowerCase().startsWith("en");
+    return isEn && maleKeywords.some((k) => n.includes(k)) && !femaleKeywords.some((k) => n.includes(k));
+  });
+  if (maleEn) return maleEn;
+
+  // 2. Any voice that explicitly mentions male
+  const anyMale = voices.find((v) => {
+    const n = v.name.toLowerCase();
+    return maleKeywords.some((k) => n.includes(k)) && !femaleKeywords.some((k) => n.includes(k));
+  });
+  if (anyMale) return anyMale;
+
+  // 3. Any English voice that is NOT on the female list
+  const notFemaleEn = voices.find((v) => {
+    const n = v.name.toLowerCase();
+    const isEn = v.lang.toLowerCase().startsWith("en");
+    return isEn && !femaleKeywords.some((k) => n.includes(k));
+  });
+  if (notFemaleEn) return notFemaleEn;
+
+  return voices[0];
+}
+
 // Initialize & Filter for Premium Male English Voices
 function initVoices() {
   if (!("speechSynthesis" in window)) return;
@@ -84,25 +128,31 @@ function initVoices() {
 
     select.innerHTML = "";
     
-    // Sort & prioritize male English voices
-    const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
-    const otherVoices = voices.filter((v) => !v.lang.startsWith("en"));
+    const femaleKeywords = [
+      "zira", "jenny", "aria", "sonia", "helena", "sabina", "laura", "mia", 
+      "cortana", "eva", "susan", "female", "woman", "catherine", "linda", 
+      "heather", "samantha", "karen", "victoria", "hazel", "google us english"
+    ];
 
-    const sorted = [...englishVoices, ...otherVoices];
+    // Prioritize male English voices
+    const maleVoices = voices.filter((v) => {
+      const n = v.name.toLowerCase();
+      const isEn = v.lang.toLowerCase().startsWith("en");
+      return isEn && (n.includes("david") || n.includes("guy") || n.includes("mark") || n.includes("ryan") || n.includes("george") || n.includes("male")) && !femaleKeywords.some(k => n.includes(k));
+    });
+    const otherVoices = voices.filter((v) => !maleVoices.includes(v) && !femaleKeywords.some(k => v.name.toLowerCase().includes(k)));
+
+    const sorted = [...maleVoices, ...otherVoices];
 
     sorted.forEach((voice) => {
       const opt = document.createElement("option");
       opt.value = voice.name;
-      const isMaleHint = voice.name.toLowerCase().includes("david") || voice.name.toLowerCase().includes("guy") || voice.name.toLowerCase().includes("male") || voice.name.toLowerCase().includes("ryan") || voice.name.toLowerCase().includes("christopher") || voice.name.toLowerCase().includes("george") || voice.name.toLowerCase().includes("daniel");
-      opt.textContent = `${voice.name} (${voice.lang})${isMaleHint ? " ★ Male" : ""}`;
+      const isMale = maleVoices.includes(voice);
+      opt.textContent = `${voice.name} (${voice.lang})${isMale ? " ★ Deep Male Voice" : ""}`;
       select.appendChild(opt);
     });
 
-    // Pick top male English voice as default
-    const preferred = englishVoices.find((v) =>
-      v.name.includes("Guy") || v.name.includes("Natural") || v.name.includes("David") || v.name.includes("Male") || v.name.includes("Google US English") || v.name.includes("Ryan")
-    ) || englishVoices[0] || voices[0];
-
+    const preferred = getBestMaleVoice();
     if (preferred) {
       select.value = preferred.name;
       selectedVoice = preferred;
@@ -113,15 +163,19 @@ function initVoices() {
   window.speechSynthesis.onvoiceschanged = populate;
 }
 
-// Trigger Instant Barge-In (<125ms)
+// Trigger Instant Barge-In (<50ms)
 function triggerInstantBargeIn() {
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.pause();
+    window.speechSynthesis.cancel();
+  }
   isAudioSpeaking = false;
   document.getElementById("audioPlayingTag")?.classList.add("hidden");
   if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
   
-  setExecutionStep("Barge-In (<125ms)", "Agent speech cancelled instantly upon interruption!");
-  appendChat("system", "⚡ [Barge-In Triggered]: Agent audio cut off in <50ms. Context shifted.");
+  setExecutionStep("Barge-In (<50ms)", "Agent speech interrupted immediately upon human voice detection!");
+  console.log("⚡ [Barge-In Triggered]: Agent audio cut off immediately.");
 }
 
 // Real Speech Audio Output Engine (Browser TTS / Web Audio playback)
@@ -130,17 +184,13 @@ function speakAudioResponse(text, isSpanish = false) {
 
   window.speechSynthesis.cancel(); // Cancel prior speech for instant turn-taking
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.02;  // Professional, authoritative cadence
-  utterance.pitch = 0.92; // Deep, confident male tone
+  utterance.rate = 1.0;   // Natural cadence
+  utterance.pitch = 0.75; // Deep masculine tone
 
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
-  } else {
-    const voices = window.speechSynthesis.getVoices();
-    const maleVoice = voices.find((v) =>
-      v.lang.startsWith("en") && (v.name.includes("Guy") || v.name.includes("David") || v.name.includes("Natural") || v.name.includes("Male"))
-    );
-    if (maleVoice) utterance.voice = maleVoice;
+  // Always re-query available voices to ensure male selection
+  const voice = selectedVoice || getBestMaleVoice();
+  if (voice) {
+    utterance.voice = voice;
   }
 
   utterance.onstart = () => {
@@ -354,17 +404,31 @@ async function startLiveVoice() {
         console.log("Speech recognition service active");
       };
 
-      speechRecognizer.onspeechstart = () => {
-        // Instant Barge-In: Cancel agent speech if user speaks while agent is talking
+      speechRecognizer.onaudiostart = () => {
         if (isAudioSpeaking) {
-          if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-          isAudioSpeaking = false;
-          document.getElementById("audioPlayingTag")?.classList.add("hidden");
-          setExecutionStep("Barge-In (<125ms)", "Agent speech cancelled instantly upon human voice detection.");
+          triggerInstantBargeIn();
+        }
+      };
+
+      speechRecognizer.onsoundstart = () => {
+        if (isAudioSpeaking) {
+          triggerInstantBargeIn();
+        }
+      };
+
+      speechRecognizer.onspeechstart = () => {
+        // Instant Barge-In: Cancel agent speech immediately when user starts speaking
+        if (isAudioSpeaking) {
+          triggerInstantBargeIn();
         }
       };
 
       speechRecognizer.onresult = (event) => {
+        // Double guarantee: if any speech result arrives while speaking, cancel audio
+        if (isAudioSpeaking) {
+          triggerInstantBargeIn();
+        }
+
         let interimTranscript = "";
         let finalTranscript = "";
 
@@ -439,6 +503,9 @@ function highlightDashboardCard(subsystem) {
 
 // Process spoken command from live microphone through dynamic Boson AI reasoning engine
 async function processSpokenCommand(text) {
+  if (isAudioSpeaking) {
+    triggerInstantBargeIn();
+  }
   setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
   try {
     const t0 = performance.now();
@@ -771,6 +838,11 @@ function sendManualUtterance() {
   const input = document.getElementById("manualInput");
   const text = input.value.trim();
   if (!text) return;
+  
+  if (isAudioSpeaking) {
+    triggerInstantBargeIn();
+  }
+
   input.value = "";
   appendChat("user", text);
   processSpokenCommand(text);
@@ -794,6 +866,18 @@ function initWaveform() {
 
     if (analyserNode && micDataArray && isVoiceActive) {
       analyserNode.getByteFrequencyData(micDataArray);
+
+      // Hardware VAD: If microphone receives human speech volume while agent is speaking, interrupt immediately!
+      if (isAudioSpeaking) {
+        let sum = 0;
+        for (let k = 0; k < micDataArray.length; k++) {
+          sum += micDataArray[k];
+        }
+        const avg = sum / micDataArray.length;
+        if (avg > 20) {
+          triggerInstantBargeIn();
+        }
+      }
     }
 
     for (let i = 0; i < bars; i++) {

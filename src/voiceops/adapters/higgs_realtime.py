@@ -354,13 +354,13 @@ class HiggsRealtimeSession:
 
         # 5. Dynamic operational inspection with scoring
         subsystem_keywords = {
-            "security_alarm": ["alarma", "alarm", "intelbras", "particion", "partición", "zona", "zonas", "seguridad", "security", "desarmado", "breach", "intrusión", "intrusion", "disparadas"],
-            "video_surveillance": ["camara", "camaras", "cámara", "cámaras", "camera", "cameras", "dahua", "nvr", "video", "movimiento", "motion", "patio", "acceso"],
-            "solar_power": ["solar", "panel", "paneles", "bateria", "batería", "battery", "energia", "energía", "inversor", "inverter", "growatt", "xmart", "watt", "watts", "voltaje", "potencia", "breaker", "grid voltage", "voltaje de red"],
-            "telephony": ["telefonia", "telefonía", "telephony", "sip", "pbx", "llamada", "llamadas", "call", "extension", "extensión", "extensiones", "grandstream", "voip", "ami", "troncal", "zoiper"],
-            "network_wifi": ["wifi", "wi-fi", "access point", "punto de acceso", "ap-solaryard", "solaryard", "unifi", "udm", "internet", "wan", "packet loss", "paquete", "perdida", "pérdida", "ping", "telconet", "red"],
-            "dmx_lighting": ["dmx", "luz", "luces", "iluminacion", "iluminación", "lighting", "artnet", "art-net", "escenario", "stage", "luminarias"],
-            "servers_rack": ["server", "servidor", "servidores", "servers", "rack", "edge", "cpu", "amd", "ryzen", "temperatura", "compute", "ag-41", "servicio", "servicios", "services", "home assistant", "memoria", "ram", "nodo"],
+            "security_alarm": ["alarma", "alarm", "intelbras", "particion", "partición", "partition", "zona", "zonas", "zone", "zones", "seguridad", "security", "desarmado", "disarmed", "armed", "armado", "breach", "intrusión", "intrusion", "disparadas", "sensor", "sensors", "sensores", "perimeter", "perimetro", "perímetro"],
+            "video_surveillance": ["camara", "camaras", "cámara", "cámaras", "camera", "cameras", "dahua", "nvr", "video", "movimiento", "motion", "patio", "acceso", "surveillance", "cctv", "stream", "feed", "recording", "channels", "canales"],
+            "solar_power": ["solar", "panel", "paneles", "bateria", "batería", "battery", "energia", "energía", "energy", "power", "inversor", "inverter", "growatt", "xmart", "watt", "watts", "voltaje", "voltage", "volts", "volt", "potencia", "breaker", "grid voltage", "voltaje de red", "grid", "electricity", "generation", "pv", "solar power"],
+            "telephony": ["telefonia", "telefonía", "telephony", "telephone", "phone", "phones", "sip", "pbx", "llamada", "llamadas", "call", "calls", "calling", "extension", "extensión", "extensiones", "extensions", "grandstream", "ucm6104", "ucm", "voip", "ami", "troncal", "trunk", "zoiper", "softphone", "streetvx", "wrong streetvx", "wrong street"],
+            "network_wifi": ["wifi", "wi-fi", "access point", "access points", "ap", "aps", "punto de acceso", "puntos de acceso", "ap-solaryard", "solaryard", "unifi", "udm", "dream machine", "gateway", "internet", "wan", "packet loss", "paquete", "perdida", "pérdida", "ping", "telconet", "red", "network", "networking", "ethernet", "poe", "switch", "router", "connectivity", "connection"],
+            "dmx_lighting": ["dmx", "luz", "luces", "iluminacion", "iluminación", "lighting", "light", "lights", "artnet", "art-net", "escenario", "stage", "luminarias", "strobe", "scene", "escena"],
+            "servers_rack": ["server", "servidor", "servidores", "servers", "rack", "edge", "cpu", "amd", "ryzen", "temperatura", "temp", "temperature", "compute", "ag-41", "servicio", "servicios", "service", "services", "home assistant", "memoria", "ram", "memory", "nodo", "node", "nodes"],
         }
 
         scores: dict[str, int] = {}
@@ -368,6 +368,24 @@ class HiggsRealtimeSession:
             sc = sum(2 if " " in kw else 1 for kw in kws if re.search(r"\b" + re.escape(kw) + r"\b", lower))
             if sc > 0:
                 scores[sub] = sc
+
+        is_full_diagnostic = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in [
+            "diagnóstico", "diagnostico", "diagnostics", "estado general", "overview", "resumen",
+            "all systems", "todo el sistema", "full status", "summary", "everything", "site diagnostics",
+            "todos los sistemas", "todo", "completo", "full site"
+        ])
+
+        if not scores and not is_full_diagnostic:
+            reply = (
+                "Disculpa, no logré identificar con claridad el subsistema. ¿Deseas consultar la energía solar y batería, telefonía Grandstream, red UniFi, alarma Intelbras o cámaras Dahua?"
+                if is_spanish
+                else "I didn't quite catch the specific subsystem. Would you like me to inspect the solar power & battery, Grandstream PBX telephony, UniFi network, Intelbras alarm, or Dahua cameras?"
+            )
+            return {
+                "reply": reply,
+                "subsystem": "general_dialogue",
+                "tool_records": [],
+            }
 
         target_sub = max(scores, key=scores.get) if scores else "all"
 
