@@ -149,6 +149,30 @@ def test_guardian_voice_http_bridge_requires_token_and_binds_event() -> None:
         thread.join(timeout=3)
 
 
+def test_voice_status_reports_audio_source_and_provider_modes() -> None:
+    server = VoiceOpsDemoServer(("127.0.0.1", 0))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+    try:
+        status = _get_json(base + "/api/voice/status")
+        assert status["AUDIO_SOURCE"] in {"HIGGS", "BROWSER_TTS_FALLBACK", "NONE"}
+        assert status["STT_SOURCE"] == "BROWSER_SPEECH_RECOGNITION"
+        providers = status["providers"]
+        assert providers["browser_tts"]["mode"] == "BROWSER_TTS_FALLBACK"
+        assert providers["instacloud"]["mode"] == "NOT_CONNECTED"
+        assert "boson_higgs" in providers
+        assert "home_assistant" in providers
+        assert "grandstream_ami" in providers
+        assert "qwen_amd" in providers
+        assert "insforge" in providers
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
 def test_guardian_voice_http_bridge_allows_loopback_without_shared_token() -> None:
     server = VoiceOpsDemoServer(("127.0.0.1", 0))
     thread = threading.Thread(target=server.serve_forever, daemon=True)

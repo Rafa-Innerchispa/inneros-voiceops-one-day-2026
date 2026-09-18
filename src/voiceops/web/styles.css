@@ -1099,6 +1099,45 @@ body {
   padding-top: 4px;
 }
 
+.provider-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.provider-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.provider-row:last-child {
+  border-bottom: none;
+}
+
+.provider-row .truth-badge.real {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #6ee7b7;
+}
+
+.provider-row .truth-badge.fallback {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.provider-row .truth-badge.not-connected {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
 .status-indicator {
   font-size: 10px;
   font-weight: 700;

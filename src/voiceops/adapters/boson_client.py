@@ -82,6 +82,8 @@ def mint_client_secret(*, ttl_seconds: int = 600) -> dict[str, Any]:
         "subprotocol_prefix": "bai-client-secret.",
         "provider": "Boson AI Higgs Realtime",
         "ready": True,
+        "AUDIO_SOURCE": "HIGGS",
+        "sample_rate": 24000,
     }
 
 

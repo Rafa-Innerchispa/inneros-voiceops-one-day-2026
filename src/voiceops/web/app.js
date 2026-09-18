@@ -41,6 +41,33 @@ let scriptProcessorNode = null;
 let silentGainNode = null;
 let recognition = null;
 let selectedVoice = null;
+let currentAudioSource = "NONE";
+
+const AUDIO_SOURCE = {
+  NONE: "NONE",
+  HIGGS: "HIGGS",
+  BROWSER_TTS_FALLBACK: "BROWSER_TTS_FALLBACK",
+};
+
+function setAudioSource(source) {
+  currentAudioSource = source;
+  const badge = document.getElementById("audioSourceBadge");
+  const tag = document.getElementById("audioPlayingTag");
+  if (badge) {
+    badge.textContent = source;
+    badge.className = `badge-val ${source === AUDIO_SOURCE.HIGGS ? "text-success" : source === AUDIO_SOURCE.BROWSER_TTS_FALLBACK ? "text-warning" : ""}`;
+  }
+  if (tag && !isAudioSpeaking) {
+    tag.textContent = `AUDIO_SOURCE = ${source}`;
+  }
+  console.log(`AUDIO_SOURCE = ${source}`);
+}
+
+function formatTelemetryValue(value, truth, suffix = "") {
+  if (truth && truth !== "LIVE") return "—";
+  if (value === null || value === undefined || value === "") return "—";
+  return `${value}${suffix}`;
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   initWaveform();
@@ -49,9 +76,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (htrEl) htrEl.textContent = `+${currentHtrTotal.toFixed(1)}`;
   fetchTelemetry();
   fetchBosonStatus();
+  fetchVoiceStatus();
 
   // Continuously poll live telemetry every 2 seconds for real-time sensor updates
   setInterval(fetchTelemetry, 2000);
+  setInterval(fetchVoiceStatus, 5000);
 
   // Attach event listeners
   document.getElementById("refreshTelemetryBtn")?.addEventListener("click", fetchTelemetry);
@@ -163,9 +192,10 @@ function speakText(text, force = false) {
 
     utterance.onstart = () => {
       isAudioSpeaking = true;
+      setAudioSource(AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
       const tag = document.getElementById("audioPlayingTag");
       if (tag) {
-        tag.textContent = "BROWSER TTS FALLBACK";
+        tag.textContent = "AUDIO_SOURCE = BROWSER_TTS_FALLBACK";
         tag.classList.remove("hidden");
       }
       document.getElementById("voiceOrb")?.classList.add("active");
@@ -251,10 +281,12 @@ async function initBosonSession() {
       wsUrl = data.ws_url;
       subprotocols.push(`bai-client-secret.${data.token}`);
       useBrowserTtsFallback = false;
+      setAudioSource(data.AUDIO_SOURCE || AUDIO_SOURCE.HIGGS);
     } else {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       wsUrl = `${protocol}//${window.location.host}${data.ws_url || "/ws/higgs"}`;
       useBrowserTtsFallback = true;
+      setAudioSource(data.AUDIO_SOURCE || AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
     }
 
     higgsWebSocket = new WebSocket(wsUrl, subprotocols);
@@ -307,13 +339,12 @@ function handleHiggsServerEvent(event) {
     pendingTranscript += text;
     if (text) {
       appendChat("agent", text);
+      const src = event.AUDIO_SOURCE || event.audio_source || (useBrowserTtsFallback ? AUDIO_SOURCE.BROWSER_TTS_FALLBACK : AUDIO_SOURCE.HIGGS);
       setExecutionStep(
-        event.audio_source === "BROWSER TTS FALLBACK" ? "BROWSER TTS FALLBACK" : "Higgs Speaking",
-        event.audio_source === "BROWSER TTS FALLBACK"
-          ? "Browser SpeechSynthesis output"
-          : "Boson Higgs audio stream"
+        src === AUDIO_SOURCE.BROWSER_TTS_FALLBACK ? "AUDIO_SOURCE = BROWSER_TTS_FALLBACK" : "AUDIO_SOURCE = HIGGS (transcript)",
+        src === AUDIO_SOURCE.BROWSER_TTS_FALLBACK ? "Browser SpeechSynthesis output" : "Boson Higgs transcript (audio via PCM stream)"
       );
-      if (event.audio_source === "BROWSER TTS FALLBACK" || useBrowserTtsFallback) {
+      if (src === AUDIO_SOURCE.BROWSER_TTS_FALLBACK || useBrowserTtsFallback) {
         speakText(text, true);
       }
     }
@@ -336,23 +367,26 @@ function handleHiggsServerEvent(event) {
     const base64Audio = event.delta || "";
     if (base64Audio) {
       useBrowserTtsFallback = false;
+      setAudioSource(AUDIO_SOURCE.HIGGS);
       const tag = document.getElementById("audioPlayingTag");
       if (tag) {
-        tag.textContent = "HIGGS AUDIO";
+        tag.textContent = "AUDIO_SOURCE = HIGGS";
         tag.classList.remove("hidden");
       }
       playPCM16AudioChunk(base64Audio, event.sample_rate || higgsAudioSampleRate);
     }
   } else if (type === "response.done") {
+    const finalText = pendingTranscript;
     pendingTranscript = "";
-    if (useBrowserTtsFallback && pendingTranscript) {
-      speakText(pendingTranscript, true);
+    if (useBrowserTtsFallback && finalText) {
+      speakText(finalText, true);
     }
   } else if (type === "input_audio_buffer.speech_started") {
     cancelAllAudioPlayback();
   } else if (type === "error") {
     console.warn("Higgs error event:", event);
     useBrowserTtsFallback = true;
+    setAudioSource(AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
   }
 }
 
@@ -628,7 +662,8 @@ async function processSpokenCommand(text) {
 
     const reply = data.reply || "Operational query processed.";
     appendChat("agent", reply);
-    setExecutionStep("BROWSER TTS FALLBACK", "HTTP converse fallback · SpeechSynthesis");
+    setExecutionStep("AUDIO_SOURCE = BROWSER_TTS_FALLBACK", "HTTP converse fallback · SpeechSynthesis");
+    setAudioSource(AUDIO_SOURCE.BROWSER_TTS_FALLBACK);
     speakText(reply, true);
 
     if (data.subsystem) {
@@ -731,9 +766,13 @@ async function fetchTelemetry() {
         const solGen = document.getElementById("solGen");
         const solBat = document.getElementById("solBat");
         const solGrid = document.getElementById("solGrid");
-        if (solGen) solGen.textContent = `${sol.solar_generation_watts || 529} W`;
-        if (solBat) solBat.textContent = `${sol.battery_charge_pct || 100}% (${sol.battery_voltage_volts || 52.4}V)`;
-        if (solGrid) solGrid.textContent = `${sol.grid_voltage_volts || 120.6}V / 60Hz Guayaquil Grid`;
+        if (solGen) solGen.textContent = formatTelemetryValue(sol.solar_generation_watts, sol.truth, " W");
+        if (solBat) {
+          const pct = formatTelemetryValue(sol.battery_charge_pct, sol.truth, "%");
+          const volts = formatTelemetryValue(sol.battery_voltage_volts, sol.truth, "V");
+          solBat.textContent = pct === "—" ? "—" : `${pct} (${volts})`;
+        }
+        if (solGrid) solGrid.textContent = formatTelemetryValue(sol.grid_voltage_volts, sol.truth, "V / 60Hz Guayaquil Grid");
       }
 
       // 2. Telephony Subsystem
@@ -746,8 +785,8 @@ async function fetchTelemetry() {
           const extList = tel.registered_extensions.map((e) => e.ext).join(", ");
           telExts.textContent = `${tel.registered_extensions.length} Registered (${extList})`;
         }
-        if (telQuality && tel.trunk_quality) {
-          telQuality.textContent = `Jitter ${tel.trunk_quality.jitter_ms || 2.1}ms (MOS ${tel.trunk_quality.mos_score || 4.38})`;
+        if (telQuality) {
+          telQuality.textContent = tel.truth === "LIVE" ? "AMI live read" : "—";
         }
       }
 
@@ -757,13 +796,13 @@ async function fetchTelemetry() {
         updateTruthBadge("netTruth", net.truth);
         const netWan = document.getElementById("netWan");
         const netLoss = document.getElementById("netLoss");
-        if (netWan && net.wan_status) {
-          netWan.textContent = `${net.wan_status.bandwidth_gbps || 1.0} Gbps (RTT ${net.wan_status.latency_ms || 3.8}ms)`;
+        if (netWan) {
+          netWan.textContent = net.wan_online === true ? "WAN online" : net.wan_online === false ? "WAN offline" : "—";
         }
         if (netLoss && net.access_points) {
           const yard = net.access_points.find((ap) => ap.ap_id.includes("SolarYard")) || net.access_points[0];
-          netLoss.textContent = `${yard.packet_loss_pct || 0.0}% Packet Loss`;
-          netLoss.className = (yard.packet_loss_pct || 0.0) > 5 ? "text-danger" : "text-success";
+          netLoss.textContent = yard?.status || "—";
+          netLoss.className = String(yard?.status || "").includes("DEGRADED") ? "text-danger" : "text-success";
         }
       }
 
@@ -772,7 +811,7 @@ async function fetchTelemetry() {
         const alm = sub.security_alarm;
         updateTruthBadge("alarmTruth", alm.truth);
         const almZones = document.getElementById("alarmZones");
-        if (almZones) almZones.textContent = `${alm.monitored_zones_count || 10} Zones Monitored`;
+        if (almZones) almZones.textContent = formatTelemetryValue(alm.monitored_zones_count, alm.truth, " Zones Monitored");
       }
 
       // 5. Video Surveillance Subsystem
@@ -780,8 +819,8 @@ async function fetchTelemetry() {
         const cam = sub.video_surveillance;
         updateTruthBadge("camTruth", cam.truth);
         const camChannels = document.getElementById("camChannels");
-        if (camChannels && cam.channels) {
-          camChannels.textContent = cam.channels.map((c) => `${c.channel} ${c.alias}`).join(" · ");
+        if (camChannels) {
+          camChannels.textContent = cam.nvr_host ? `${cam.nvr_host} · ${cam.presence || "—"}` : "—";
         }
       }
     }
@@ -796,9 +835,68 @@ async function fetchBosonStatus() {
     const res = await fetch("/api/boson/status");
     if (!res.ok) return;
     const data = await res.json();
+    if (data.AUDIO_SOURCE && currentAudioSource === AUDIO_SOURCE.NONE) {
+      setAudioSource(data.AUDIO_SOURCE);
+    }
     console.log("Boson AI Higgs Realtime Status:", data);
   } catch (err) {
     console.error("Boson status check error:", err);
+  }
+}
+
+function providerStatusClass(mode) {
+  const normalized = String(mode || "").toUpperCase();
+  if (normalized === "REAL" || normalized === "CONFIGURED") return "real";
+  if (normalized === "FALLBACK" || normalized === "BROWSER_TTS_FALLBACK") return "fallback";
+  return "not-connected";
+}
+
+function renderProviderStatus(data) {
+  const list = document.getElementById("providerStatusList");
+  if (!list || !data.providers) return;
+
+  const labels = {
+    boson_higgs: "Boson Higgs",
+    browser_tts: "Browser TTS",
+    home_assistant: "Home Assistant",
+    grandstream_ami: "Grandstream AMI",
+    qwen_amd: "Qwen AMD",
+    insforge: "InsForge",
+    instacloud: "InstaCloud",
+  };
+
+  list.innerHTML = Object.entries(data.providers)
+    .map(([key, provider]) => {
+      const label = labels[key] || key;
+      const mode = provider.mode || provider.status || "NOT_CONNECTED";
+      const cls = providerStatusClass(mode);
+      return `<div class="provider-row"><span>${label}</span><span class="truth-badge ${cls}">${mode}</span></div>`;
+    })
+    .join("");
+
+  const instaCard = document.getElementById("cardInstaCloud");
+  if (instaCard && data.providers.instacloud) {
+    const badge = instaCard.querySelector(".truth-badge");
+    const mode = data.providers.instacloud.mode || "NOT_CONNECTED";
+    if (badge) {
+      badge.textContent = mode;
+      badge.className = `truth-badge ${providerStatusClass(mode)}`;
+    }
+  }
+}
+
+async function fetchVoiceStatus() {
+  try {
+    const res = await fetch("/api/voice/status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.AUDIO_SOURCE && !isVoiceActive) {
+      setAudioSource(data.AUDIO_SOURCE);
+    }
+    renderProviderStatus(data);
+    console.log("Voice provider status:", data);
+  } catch (err) {
+    console.error("Voice status check error:", err);
   }
 }
 

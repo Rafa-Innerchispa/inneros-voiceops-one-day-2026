@@ -36,6 +36,10 @@
           <span class="badge-label">S2S ENGINE</span>
           <span class="badge-val">Higgs Realtime v1 (&le;125ms Interruption)</span>
         </div>
+        <div class="model-badge" id="audioSourceBadgeWrap">
+          <span class="badge-label">AUDIO_SOURCE</span>
+          <span class="badge-val" id="audioSourceBadge">NONE</span>
+        </div>
       </div>
 
       <div class="header-right">
@@ -368,6 +372,23 @@
                 <span class="hash-label">Evidence SHA-256 Hash:</span>
                 <span id="evidenceHash" class="hash-val">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Provider Truth Report -->
+          <div class="card panel" id="providerStatusPanel">
+            <div class="panel-header">
+              <h3>Integration Truth Report</h3>
+              <span class="badge-pill">REAL / FALLBACK / NOT_CONNECTED</span>
+            </div>
+            <div id="providerStatusList" class="provider-status-list">
+              <div class="provider-row"><span>Boson Higgs</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>Browser TTS</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>Home Assistant</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>Grandstream AMI</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>Qwen AMD</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>InsForge</span><span class="truth-badge unverified">—</span></div>
+              <div class="provider-row"><span>InstaCloud</span><span class="truth-badge unverified">NOT CONNECTED</span></div>
             </div>
           </div>
 

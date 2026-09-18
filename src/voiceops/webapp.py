@@ -337,7 +337,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                         "model": "higgs-realtime",
                         "sample_rate": 24000,
                         "ready": False,
-                        "tts_fallback": "BROWSER TTS FALLBACK",
+                        "AUDIO_SOURCE": "BROWSER_TTS_FALLBACK",
+                        "tts_fallback": "BROWSER_TTS_FALLBACK",
                     },
                     status=HTTPStatus.SERVICE_UNAVAILABLE,
                 )
@@ -359,12 +360,18 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                     "sub_125ms_barge_in": True,
                     "ready": configured,
                     "configured": configured,
+                    "AUDIO_SOURCE": "HIGGS" if configured else "BROWSER_TTS_FALLBACK",
                     "upstream_ws": "wss://api.boson.ai/v1/realtime",
                     "websocket_endpoint": "/ws/higgs",
                     "token_endpoint": "/api/boson/token",
                     "connection_modes": ["direct", "relay_fallback", "browser_fallback"],
                 }
             )
+            return
+        if self.path == "/api/voice/status":
+            from .provider_status import build_voice_status
+
+            self._send_json(build_voice_status())
             return
         if self.path == "/api/state":
             state = self.store.snapshot()
@@ -640,7 +647,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                     "session": {
                         "id": session.session_id,
                         "model": "browser-fallback",
-                        "audio_source": "BROWSER TTS FALLBACK",
+                        "AUDIO_SOURCE": "BROWSER_TTS_FALLBACK",
+                        "audio_source": "BROWSER_TTS_FALLBACK",
                         "upstream": "NOT_CONNECTED",
                     },
                 }
@@ -678,7 +686,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                             {
                                 "type": "input_audio_buffer.speech_started",
                                 "status": "interrupted",
-                                "audio_source": "BROWSER TTS FALLBACK",
+                                "AUDIO_SOURCE": "BROWSER_TTS_FALLBACK",
+                                "audio_source": "BROWSER_TTS_FALLBACK",
                             }
                         )
                     )
@@ -699,7 +708,8 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                             {
                                 "type": "response.output_audio_transcript.delta",
                                 "delta": reply_text,
-                                "audio_source": "BROWSER TTS FALLBACK",
+                                "AUDIO_SOURCE": "BROWSER_TTS_FALLBACK",
+                                "audio_source": "BROWSER_TTS_FALLBACK",
                                 "subsystem": conv_res.get("subsystem"),
                                 "tool_records": conv_res.get("tool_records", []),
                                 "proposal": conv_res.get("proposal"),
@@ -707,7 +717,15 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                             }
                         )
                     )
-                    browser_send_text(json.dumps({"type": "response.done", "audio_source": "BROWSER TTS FALLBACK"}))
+                    browser_send_text(
+                        json.dumps(
+                            {
+                                "type": "response.done",
+                                "AUDIO_SOURCE": "BROWSER_TTS_FALLBACK",
+                                "audio_source": "BROWSER_TTS_FALLBACK",
+                            }
+                        )
+                    )
         except Exception:
             pass
 
