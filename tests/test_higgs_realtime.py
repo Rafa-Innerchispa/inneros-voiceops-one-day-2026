@@ -197,3 +197,35 @@ async def test_higgs_realtime_session_events() -> None:
     assert tool_res["action"] == "function_executed"
     assert tool_fired is True
     assert tool_res["record"]["output"]["status"] == "EXECUTED"
+
+
+def test_higgs_converse_dynamic_queries() -> None:
+    session = HiggsRealtimeSession()
+
+    # 1. Ask about alarm in Spanish
+    res_alm = session.converse("¿Cómo está la alarma y qué zonas están monitoreadas?")
+    assert res_alm["subsystem"] == "security_alarm"
+    assert "Panel Home Ralphi" in res_alm["reply"]
+    assert "10" in res_alm["reply"]
+
+    # 2. Ask about cameras in English
+    res_cam = session.converse("Show me the Dahua cameras and video surveillance status")
+    assert res_cam["subsystem"] == "video_surveillance"
+    assert "192.168.1.100" in res_cam["reply"]
+    assert "30 FPS" in res_cam["reply"]
+
+    # 3. Ask about solar in Spanish
+    res_sol = session.converse("¿Cuánto está generando el inversor solar y qué voltaje hay?")
+    assert res_sol["subsystem"] == "solar_power"
+    assert "529" in res_sol["reply"]
+    assert "120.6" in res_sol["reply"]
+
+    # 4. Action proposal and approval flow
+    res_prop = session.converse("Reinicia el punto de acceso AP-SolarYard")
+    assert res_prop["subsystem"] == "network_wifi"
+    assert "proposal" in res_prop
+    pid = res_prop["proposal"]["proposal_id"]
+
+    res_app = session.converse("Sí, autorizo la operación", active_proposal_id=pid)
+    assert res_app["subsystem"] == "governance"
+    assert "autorizada y ejecutada" in res_app["reply"]

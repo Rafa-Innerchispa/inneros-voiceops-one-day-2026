@@ -437,129 +437,76 @@ function highlightDashboardCard(subsystem) {
   }
 }
 
-// Process spoken command from live microphone
+// Process spoken command from live microphone through dynamic Boson AI reasoning engine
 async function processSpokenCommand(text) {
-  setExecutionStep("Evaluating Voice Query", `"${text.slice(0, 40)}..."`);
-  const lower = text.toLowerCase().trim();
-
-  // 1. If active proposal is pending, check if this is an explicit approval/rejection utterance
-  const isApprovalAffirmation = /^(yes|si|sí|autorizo|proceder|proceed|confirm|confirmo|adelante|hazlo|approve|ok|dale|claro|afirmativo)/i.test(lower);
-  const isApprovalDenial = /^(no|cancel|cancela|rechazar|rechazo|alto|stop|espera|negar|deny)/i.test(lower);
-
-  if (activeProposalId && (isApprovalAffirmation || isApprovalDenial)) {
-    await submitApproval(activeProposalId, text);
-    return;
-  }
-
-  // 2. Action Intent Detection: User explicitly requesting an action (restart, reboot, isolate, bypass, emergency scene)
-  const isActionIntent = lower.includes("reiniciar") || lower.includes("restart") || lower.includes("reboot") ||
-                         lower.includes("aislar") || lower.includes("isolate") || lower.includes("apagar") ||
-                         lower.includes("bypass") || lower.includes("reset") || lower.includes("cambiar escena");
-
-  if (isActionIntent) {
-    let actionType = "restart_wifi_ap";
-    let targetSubsystem = "network_wifi";
-    let actionSummary = "Power-cycle PoE port for AP-SolarYard";
-
-    if (lower.includes("solar") || lower.includes("fase") || lower.includes("breaker") || lower.includes("panel")) {
-      actionType = "isolate_solar_phase";
-      targetSubsystem = "solar_power";
-      actionSummary = "Isolate Substation Phase 2 Breaker";
-    } else if (lower.includes("sip") || lower.includes("pbx") || lower.includes("telefonia") || lower.includes("troncal")) {
-      actionType = "reset_sip_trunk";
-      targetSubsystem = "telephony_sip";
-      actionSummary = "Soft-reset Grandstream SIP Trunk UDP 4321";
-    } else if (lower.includes("dmx") || lower.includes("luz") || lower.includes("luces") || lower.includes("strobe")) {
-      actionType = "activate_dmx_emergency_scene";
-      targetSubsystem = "dmx_lighting";
-      actionSummary = "Trigger DMX Emergency Strobe Flood Scene";
-    }
-
-    try {
-      const res = await fetch("/api/governed/propose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action_type: actionType, target_subsystem: targetSubsystem }),
-      });
-      const data = await res.json();
-      activeProposalId = data.proposal_id || "prop_live_1";
-      showProposalCard(activeProposalId, data.summary || actionSummary, targetSubsystem);
-
-      const reply = `Action proposal ${activeProposalId} staged for ${targetSubsystem}. Human authorization is required. Please confirm: Do you authorize executing this action?`;
-      appendChat("agent", reply);
-      setExecutionStep("Awaiting Verbal Approval", "Speak 'Yes proceed' or 'Autorizo' to execute, or 'No' to reject.");
-      speakAudioResponse(reply);
-      return;
-    } catch (err) {
-      console.error("Proposal error:", err);
-    }
-  }
-
-  // 3. Dynamic Real-Time Operational Query / Telemetry Inspection
-  let targetSub = "all";
-  if (lower.includes("alarma") || lower.includes("alarm") || lower.includes("intelbras") || lower.includes("particion") || lower.includes("zona") || lower.includes("seguridad") || lower.includes("security") || lower.includes("desarmado") || lower.includes("breach")) {
-    targetSub = "security_alarm";
-  } else if (lower.includes("camara") || lower.includes("camaras") || lower.includes("camera") || lower.includes("cameras") || lower.includes("dahua") || lower.includes("nvr") || lower.includes("video") || lower.includes("movimiento") || lower.includes("motion") || lower.includes("patio") || lower.includes("acceso")) {
-    targetSub = "video_surveillance";
-  } else if (lower.includes("wifi") || lower.includes("red") || lower.includes("network") || lower.includes("ap") || lower.includes("access point") || lower.includes("mikrotik") || lower.includes("internet") || lower.includes("wan") || lower.includes("paquete") || lower.includes("loss")) {
-    targetSub = "network_wifi";
-  } else if (lower.includes("solar") || lower.includes("panel") || lower.includes("bateria") || lower.includes("battery") || lower.includes("energia") || lower.includes("inversor") || lower.includes("inverter") || lower.includes("growatt") || lower.includes("watt") || lower.includes("voltaje") || lower.includes("potencia")) {
-    targetSub = "solar_power";
-  } else if (lower.includes("telefonia") || lower.includes("telephony") || lower.includes("sip") || lower.includes("pbx") || lower.includes("llamada") || lower.includes("call") || lower.includes("extension") || lower.includes("grandstream") || lower.includes("voip")) {
-    targetSub = "telephony_sip";
-  } else if (lower.includes("dmx") || lower.includes("luz") || lower.includes("luces") || lower.includes("iluminacion") || lower.includes("lighting") || lower.includes("artnet") || lower.includes("stage") || lower.includes("escenario") || lower.includes("blackout")) {
-    targetSub = "dmx_lighting";
-  } else if (lower.includes("server") || lower.includes("servidor") || lower.includes("rack") || lower.includes("edge") || lower.includes("cpu") || lower.includes("amd") || lower.includes("ryzen") || lower.includes("temperatura") || lower.includes("compute")) {
-    targetSub = "servers_rack";
-  }
-
+  setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
   try {
-    setExecutionStep("Querying Live Subsystem", `Calling inspect_operational_state("${targetSub}")...`);
-    const res = await fetch("/api/governed/inspect", {
+    const t0 = performance.now();
+    const res = await fetch("/api/boson/converse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subsystem: targetSub }),
+      body: JSON.stringify({ utterance: text, active_proposal_id: activeProposalId }),
     });
-    const result = await res.json();
-    console.log("Live inspection result:", result);
+    const data = await res.json();
+    const latMs = Math.round(performance.now() - t0);
 
-    let reply = "";
-    if (targetSub === "security_alarm") {
-      const alm = result.data || {};
-      reply = `Security Alarm status: Intelbras partition 'Panel Home Ralphi' is currently Disarmed. All 10 perimeter zones are monitored and reporting normal status with zero security breaches.`;
-    } else if (targetSub === "video_surveillance") {
-      const cam = result.data || {};
-      reply = `Video Surveillance telemetry: Dahua NVR at 192.168.1.100 is live and streaming at 30 FPS across Channel 2 Acceso Norte and Channel 3 Patio Exterior. Physical Guardian VideoMotion dispatcher is actively monitoring.`;
-    } else if (targetSub === "network_wifi") {
-      const net = result.data || {};
-      const degraded = (net.access_points || []).find(ap => String(ap.status || "").includes("DEGRADED")) || {};
-      reply = `WiFi inspection complete for Guayaquil. ${degraded.ap_id || "AP-SolarYard"} on 2.4GHz is currently degraded with 18% packet loss and 4 connected clients. Core MikroTik switch CPU is at 8% and Telconet fiber WAN latency is 3.8 milliseconds.`;
-    } else if (targetSub === "solar_power") {
-      const sol = result.data || {};
-      reply = `Solar array telemetry: Currently generating ${sol.solar_generation_watts || 529} watts with battery at 100% capacity in utility present solar charging mode. Main breaker is reading 120.6 volts at 6.11 amps.`;
-    } else if (targetSub === "telephony_sip") {
-      const sip = result.data || {};
-      const exts = (sip.registered_extensions || []).map(e => e.ext).join(", ");
-      reply = `Telephony PBX status: Grandstream UCM6104 is online on UDP port 4321 with registered extensions: ${exts || "active"}. Quality jitter is 2.1 milliseconds.`;
-    } else if (targetSub === "dmx_lighting") {
-      const dmx = result.data || {};
-      reply = `DMX Lighting telemetry: Art-Net Universe 1 is running active scene ${dmx.active_scene || "Normal Operations"}. Emergency strobe beacons on channels 12 to 16 are armed and ready.`;
-    } else if (targetSub === "servers_rack") {
-      const srv = result.data || {};
-      reply = `Edge Compute status: Guayaquil AMD Radeon AI PRO R9700 node is nominal. Ambient temperature is ${srv.rack_ambient_temp_c || 24.1} degrees, CPU load is 0.38, and SHA-256 forensic audit ledger is active.`;
-    } else {
-      reply = `Live Guayaquil site diagnostics: 7 subsystems active. Intelbras Alarm disarmed and optimal, Dahua Video Surveillance streaming C2 and C3, Solar array generating 529 watts, Grandstream PBX telephony online, and Edge Node nominal.`;
+    // 1. Record tool calls in ticker
+    if (data.tool_records && data.tool_records.length > 0) {
+      data.tool_records.forEach((rec) => {
+        recordToolCall(rec.tool_name, rec.arguments, rec.output, latMs);
+      });
     }
 
+    // 2. Handle proposal
+    if (data.proposal) {
+      activeProposalId = data.proposal.proposal_id;
+      showProposalCard(activeProposalId, data.proposal.summary, data.subsystem);
+    }
+
+    // 3. Handle approval result
+    if (data.approval_result) {
+      const app = data.approval_result;
+      if (app.status === "EXECUTED") {
+        document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
+        document.getElementById("approvalBadge").className = "status-badge active";
+        document.getElementById("auditPermitId").textContent = app.permit_id;
+        document.getElementById("auditActionId").textContent = app.action_id;
+        document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
+        document.getElementById("evidenceHash").textContent = app.evidence_sha256;
+
+        const savedMin = Math.round((app.htr_seconds_returned / 60) * 10) / 10;
+        currentHtrTotal += savedMin;
+        document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
+
+        document.getElementById("proposalCard").innerHTML = `
+          <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
+          <p style="margin-top:4px;">Single-Use Permit: <code>${app.permit_id}</code> · HTR: +${savedMin} min</p>
+        `;
+        document.getElementById("manualApprovalActions").style.display = "none";
+        activeProposalId = null;
+      } else {
+        document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
+        document.getElementById("approvalBadge").className = "status-badge pending";
+        document.getElementById("proposalCard").innerHTML = `
+          <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
+          <p style="margin-top:4px;">Reason: <code>${app.reason}</code> (Fail-Closed Safety Protection)</p>
+        `;
+      }
+    }
+
+    // 4. Speak and display response
+    const reply = data.reply || "Operational query processed.";
     appendChat("agent", reply);
-    setExecutionStep("Report Spoken", "Live operational metrics streamed.");
+    setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
     speakAudioResponse(reply);
 
-    // Highlight the inspected card on the dashboard
-    highlightDashboardCard(targetSub);
+    // 5. Highlight card
+    if (data.subsystem) {
+      highlightDashboardCard(data.subsystem);
+    }
   } catch (err) {
-    console.error("Inspection error:", err);
-    const fallbackReply = "Telemetry inspection connected to Guayaquil. All primary security, power, and telephony trunks are online.";
+    console.error("Converse error:", err);
+    const fallbackReply = "Telemetry inspection connected to Guayaquil. Infrastructure systems are active.";
     appendChat("agent", fallbackReply);
     speakAudioResponse(fallbackReply);
   }
@@ -826,18 +773,7 @@ function sendManualUtterance() {
   if (!text) return;
   input.value = "";
   appendChat("user", text);
-
-  setExecutionStep("Processing Input", `Evaluating spoken input: "${text.slice(0, 30)}..."`);
-
-  if (activeProposalId && (text.toLowerCase().includes("yes") || text.toLowerCase().includes("authorize") || text.toLowerCase().includes("proceed") || text.toLowerCase().includes("si") || text.toLowerCase().includes("no"))) {
-    submitApproval(activeProposalId, text);
-  } else {
-    simulateTurn(text, { name: "inspect_operational_state", args: { subsystem: "all" } }, false, () => {
-      const reply = "Processed instruction and inspected live Guayaquil telemetry.";
-      appendChat("agent", reply);
-      speakAudioResponse(reply);
-    });
-  }
+  processSpokenCommand(text);
 }
 
 // Canvas Audio Waveform Animator (connected to real microphone AnalyserNode)

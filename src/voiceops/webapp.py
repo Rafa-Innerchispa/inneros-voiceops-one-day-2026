@@ -405,7 +405,14 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                     simulate_tool_call=tool_tuple,
                     simulate_interruption=sim_interruption,
                 )
-                self._send_json(sim_res)
+            if self.path == "/api/boson/converse":
+                from .adapters.higgs_realtime import HiggsRealtimeSession
+                payload = self._read_json()
+                utterance = str(payload.get("utterance") or "")
+                active_prop = payload.get("active_proposal_id")
+                session = HiggsRealtimeSession()
+                conv_res = session.converse(user_utterance=utterance, active_proposal_id=active_prop)
+                self._send_json(conv_res)
                 return
             if self.path == "/api/reset":
                 self._send_json(self.store.reset())
@@ -495,7 +502,11 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         if length < 0 or length > MAX_BODY_BYTES:
             raise ValueError("request body too large")
         raw = self.rfile.read(length) if length else b"{}"
-        payload = json.loads(raw.decode("utf-8"))
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="replace")
+        payload = json.loads(text)
         if not isinstance(payload, dict):
             raise ValueError("JSON body must be an object")
         return payload
