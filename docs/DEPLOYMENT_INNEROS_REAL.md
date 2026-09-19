@@ -85,15 +85,34 @@ Esperado: `"LIVE"`, cientos de entidades, panel con badge LIVE.
 
 ## Servicio persistente en InnerOS (.4)
 
-Ver plantilla: `deploy/voiceops.service.example`
+**No ejecutar en Windows PowerShell.** Los comandos van en una sesión **Linux** en el Intel host (`.4` / `ralphiia`).
 
-Resumen:
+Desde la laptop Windows, abrir sesión remota primero:
+
+```powershell
+ssh rlopez@192.168.1.4
+# o vía Tailscale:
+ssh rlopez@100.94.99.12
+```
+
+Luego en el servidor Linux:
 
 ```bash
-cd /opt/inneros/inneros-voiceops-one-day-2026   # o ruta acordada
-python -m venv .venv && .venv/bin/pip install -e .
-systemctl --user enable --now voiceops.service
+# Si el repo ya existe, encontrar ruta real:
+systemctl --user show inneros-voiceops-boson.service -p WorkingDirectory,ExecStart
+
+# Deploy (clona si no existe, pull si ya existe):
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Rafa-Innerchispa/inneros-voiceops-one-day-2026/hackathon/2026-09-18-boson-insforge/scripts/deploy_boson_14.sh)"
 ```
+
+O con repo local en el servidor:
+
+```bash
+cd "$(systemctl --user show inneros-voiceops-boson.service -p WorkingDirectory --value 2>/dev/null || echo ~/inneros/inneros_core/workspaces/inneros-voiceops-one-day-2026)"
+bash scripts/deploy_boson_14.sh
+```
+
+Ver plantillas: `deploy/inneros-voiceops-boson.service.example`, `deploy/voiceops.env.example`
 
 Exponer vía Cloudflare tunnel existente (como otros servicios creatorcore.ai).
 
