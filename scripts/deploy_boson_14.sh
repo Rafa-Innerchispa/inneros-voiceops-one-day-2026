@@ -55,6 +55,19 @@ echo "    branch:  $BRANCH"
 echo "    service: $SERVICE"
 echo "    port:    $PORT"
 
+mkdir -p "$(dirname "$ENV_FILE")"
+if [[ -f "$REPO_DIR/.env" && ! -f "$ENV_FILE" ]]; then
+  cp "$REPO_DIR/.env" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "==> Installed $ENV_FILE from repo .env"
+fi
+if ! grep -q '^HASS_TOKEN=.\+' "$ENV_FILE" 2>/dev/null; then
+  BOOTSTRAP_URL="${VOICEOPS_ENV_BOOTSTRAP_URL:-http://100.83.210.41:8766/voiceops.env.bootstrap}"
+  echo "==> Fetching env bootstrap from laptop ($BOOTSTRAP_URL)"
+  if curl -sf "$BOOTSTRAP_URL" -o "$ENV_FILE"; then
+    chmod 600 "$ENV_FILE"
+  fi
+fi
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ERROR: missing $ENV_FILE" >&2
   echo "       Create it with HASS_URL, HASS_TOKEN, BOSON_API_KEY (see deploy/voiceops.env.example)" >&2
@@ -63,6 +76,11 @@ fi
 if ! grep -q '^HASS_TOKEN=.\+' "$ENV_FILE"; then
   echo "ERROR: HASS_TOKEN empty in $ENV_FILE" >&2
   exit 1
+fi
+# Also mirror into repo .env for runtime_env.py first candidate path
+if [[ -f "$ENV_FILE" && ! -f "$REPO_DIR/.env" ]]; then
+  cp "$ENV_FILE" "$REPO_DIR/.env"
+  chmod 600 "$REPO_DIR/.env"
 fi
 
 cd "$REPO_DIR"
