@@ -19,14 +19,44 @@ def get_operational_registry() -> OperationalStateRegistry:
     return _GLOBAL_REGISTRY
 
 
-def inspect_operational_state(subsystem: str = "all", live_fluctuation: bool = False) -> dict[str, Any]:
+def inspect_operational_state(
+    subsystem: str = "all",
+    live_fluctuation: bool = False,
+    mirror_evidence: bool = False,
+) -> dict[str, Any]:
     """READ-ONLY tool for inspecting operational telemetry across Guayaquil infrastructure.
 
     Args:
         subsystem: The target subsystem ('solar_power', 'telephony', 'network_wifi', 'dmx_lighting', 'servers_rack', or 'all').
         live_fluctuation: Whether to include simulated micro-variations over time.
+        mirror_evidence: Mirror this inspect to InsForge when triggered by voice/tools (not telemetry polling).
     """
-    return _GLOBAL_REGISTRY.get_subsystem_telemetry(subsystem, live_fluctuation=live_fluctuation)
+    result = _GLOBAL_REGISTRY.get_subsystem_telemetry(subsystem, live_fluctuation=live_fluctuation)
+    if mirror_evidence:
+        from .adapters.insforge_mirror import mirror_voiceops_event
+
+        mirror_voiceops_event(
+            "voiceops.inspect",
+            {"subsystem": subsystem, "truth": result.get("truth"), "status": result.get("status")},
+        )
+    return result
+
+
+def list_home_assistant_controls(
+    include_discovery: bool = True,
+    discovery_limit: int = 2000,
+    controllable_only: bool = False,
+    query: str = "",
+) -> dict[str, Any]:
+    """READ-ONLY: list governed Home Assistant actions (catalog + entity inventory)."""
+    from .adapters.ha_actions import list_available_controls
+
+    return list_available_controls(
+        include_discovery=include_discovery,
+        discovery_limit=discovery_limit,
+        controllable_only=controllable_only,
+        query=query,
+    )
 
 
 def propose_governed_action(
@@ -37,14 +67,25 @@ def propose_governed_action(
     """Proposes a bounded operational action requiring human verbal approval before execution.
 
     Args:
-        action_type: One of 'restart_wifi_ap', 'switch_solar_bypass', 'isolate_solar_phase', 'reset_sip_trunk', 'activate_dmx_emergency_scene', 'failover_lte_wan'.
+        action_type: Legacy demo types, or 'ha_service' for any allowlisted Home Assistant entity/service.
         target_subsystem: The subsystem to act on.
-        parameters: Optional key-value parameters for the action.
+        parameters: Optional action parameters. For HA use catalog_id, or domain+service+entity_id, or entity_id+verb.
     """
     proposal = _GLOBAL_REGISTRY.propose_action(
         action_type=action_type,
         target_subsystem=target_subsystem,
         parameters=parameters,
+    )
+    from .adapters.insforge_mirror import mirror_voiceops_event
+
+    mirror_voiceops_event(
+        "voiceops.proposal",
+        {
+            "proposal_id": proposal.payload["proposal_id"],
+            "action_type": proposal.action_type,
+            "target_subsystem": target_subsystem,
+            "summary": proposal.summary,
+        },
     )
     return {
         "proposal_id": proposal.payload["proposal_id"],
@@ -121,15 +162,36 @@ def submit_user_approval(
         json.dumps(evidence_payload, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
+    from .adapters.insforge_mirror import mirror_governed_action, mirror_voiceops_event
+
+    mirror_voiceops_event(
+        "voiceops.approval",
+        {
+            "proposal_id": proposal_id,
+            "permit_id": permit.permit_id,
+            "utterance": utterance,
+            "approved": True,
+        },
+        session_id=session_id,
+    )
+    mirror_governed_action(proposal_id, permit.permit_id, proposal.action_type, result.status)
+
+    execution_status = str(result.details.get("execution_status") or "")
+    executed_ok = result.status == "created" and execution_status.startswith("SUCCESS")
     return {
-        "status": "EXECUTED",
+        "status": "EXECUTED" if executed_ok else "FAILED",
         "action_id": result.action_id,
         "action_type": result.action_type,
         "permit_id": permit.permit_id,
         "evidence_sha256": evidence_hash,
         "htr_seconds_returned": result.details["htr_metric"]["saved_seconds"],
         "classification": result.details["htr_metric"]["classification"],
-        "message": f"Action '{result.action_type}' successfully executed under permit {permit.permit_id}.",
+        "execution_status": execution_status,
+        "message": (
+            f"Action '{result.action_type}' successfully executed under permit {permit.permit_id}."
+            if executed_ok
+            else f"Action '{result.action_type}' was approved but live execution failed. See details.ha_execution."
+        ),
         "details": result.details,
     }
 
@@ -187,14 +249,33 @@ HIGGS_TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "name": "list_home_assistant_controls",
+        "description": "READ-ONLY: List Home Assistant entities and catalog actions that VoiceOps can execute after explicit verbal approval.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "include_discovery": {
+                    "type": "boolean",
+                    "description": "When true, query live HA entities in allowlisted domains (requires HASS_TOKEN).",
+                },
+                "discovery_limit": {
+                    "type": "integer",
+                    "description": "Maximum number of discovered entities to return.",
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
         "name": "propose_governed_action",
-        "description": "Proposes a bounded operational intervention on a subsystem. Returns a proposal_id and requires verbal human confirmation before execution.",
+        "description": "Proposes a bounded operational intervention. Use ha_service + entity_id/domain/service for any allowlisted Home Assistant control, or legacy demo action types.",
         "parameters": {
             "type": "object",
             "properties": {
                 "action_type": {
                     "type": "string",
                     "enum": [
+                        "ha_service",
                         "restart_wifi_ap",
                         "switch_solar_bypass",
                         "isolate_solar_phase",
@@ -202,16 +283,24 @@ HIGGS_TOOL_DEFINITIONS = [
                         "activate_dmx_emergency_scene",
                         "failover_lte_wan",
                     ],
-                    "description": "The specific action to perform.",
+                    "description": "Use ha_service for real Home Assistant actions; legacy types map to catalog when configured.",
                 },
                 "target_subsystem": {
                     "type": "string",
-                    "enum": ["solar_power", "telephony", "network_wifi", "dmx_lighting", "servers_rack"],
+                    "enum": [
+                        "all",
+                        "solar_power",
+                        "telephony",
+                        "network_wifi",
+                        "dmx_lighting",
+                        "servers_rack",
+                        "security_alarm",
+                    ],
                     "description": "Target subsystem for the action.",
                 },
                 "parameters": {
                     "type": "object",
-                    "description": "Optional action parameters.",
+                    "description": "HA: catalog_id | entity_id+verb | domain+service+entity_id | service_data.",
                 },
             },
             "required": ["action_type", "target_subsystem"],
@@ -261,8 +350,17 @@ HIGGS_TOOL_DEFINITIONS = [
 
 def execute_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Dispatches tool calls received from Higgs Realtime."""
-    if name == "inspect_operational_state":
-        return inspect_operational_state(subsystem=arguments.get("subsystem", "all"))
+    if name == "list_home_assistant_controls":
+        return list_home_assistant_controls(
+            include_discovery=bool(arguments.get("include_discovery", True)),
+            discovery_limit=int(arguments.get("discovery_limit") or 200),
+        )
+    elif name == "inspect_operational_state":
+        return inspect_operational_state(
+            subsystem=arguments.get("subsystem", "all"),
+            live_fluctuation=True,
+            mirror_evidence=True,
+        )
     elif name == "propose_governed_action":
         return propose_governed_action(
             action_type=arguments.get("action_type", ""),

@@ -1,0 +1,456 @@
+{
+  "generated_at": "2026-09-19T15:47:12.121405+00:00",
+  "source": "scratch_evidence",
+  "entity_count": 56,
+  "controllable_count": 6,
+  "entities": [
+    {
+      "entity_id": "alarm_control_panel.casa_mama_casa_mama",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "Casa Mama Casa Mama",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "alarm_control_panel.la_victoria_particion_a",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "La Victoria  Partición A",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "alarm_control_panel.la_victoria_particion_b",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "La Victoria  Partición B",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "alarm_control_panel.la_victoria_particion_c",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "La Victoria  Partición C",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "alarm_control_panel.la_victoria_particion_d",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "La Victoria  Partición D",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "alarm_control_panel.panel_home_ralphi_panel_home_ralphi",
+      "domain": "alarm_control_panel",
+      "state": "disarmed",
+      "friendly_name": "Panel Home Ralphi Panel Home Ralphi",
+      "source": "scratch_evidence",
+      "controllable": true
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_1",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 1",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_10",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 10",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_11",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 11",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_12",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 12",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_13",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 13",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_14",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 14",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_15",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 15",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_16",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 16",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_17",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 17",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_18",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 18",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_19",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 19",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_2",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 2",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_20",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 20",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_21",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 21",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_22",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 22",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_23",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 23",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_24",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 24",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_25",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 25",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_26",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 26",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_27",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 27",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_28",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 28",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_29",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 29",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_3",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 3",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_30",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 30",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_31",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 31",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_32",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 32",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_33",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 33",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_34",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 34",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_35",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 35",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_36",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 36",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_37",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 37",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_38",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 38",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_39",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 39",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_4",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 4",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_5",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 5",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_6",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 6",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_7",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 7",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_8",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 8",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.la_victoria_zona_9",
+      "domain": "binary_sensor",
+      "state": "off",
+      "friendly_name": "La Victoria  Zona 9",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "binary_sensor.unifi_dream_machine_wan_status",
+      "domain": "binary_sensor",
+      "state": "on",
+      "friendly_name": "UniFi Dream Machine WAN status",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "device_tracker.nvr_dahua",
+      "domain": "device_tracker",
+      "state": "home",
+      "friendly_name": "NVR Dahua NVR Dahua",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.breaker_phase_a_current",
+      "domain": "sensor",
+      "state": "6.11",
+      "friendly_name": "Breaker Phase A current",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.breaker_phase_a_power",
+      "domain": "sensor",
+      "state": "0.593",
+      "friendly_name": "Breaker Phase A power",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.breaker_phase_a_voltage",
+      "domain": "sensor",
+      "state": "120.6",
+      "friendly_name": "Breaker Phase A voltage",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.cloud_gateway_ultra_ralphi_state",
+      "domain": "sensor",
+      "state": "connected",
+      "friendly_name": "Cloud Gateway Ultra Ralphi State",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.inneros_pi01_solar_battery_capacity",
+      "domain": "sensor",
+      "state": "100",
+      "friendly_name": "InnerOS Pi01 Solar Status",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.inneros_pi01_solar_load",
+      "domain": "sensor",
+      "state": "22",
+      "friendly_name": "InnerOS Pi01 Solar Status",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.inneros_pi01_solar_output_power",
+      "domain": "sensor",
+      "state": "529",
+      "friendly_name": "InnerOS Pi01 Solar Status",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.inneros_pi01_solar_pv_voltage",
+      "domain": "sensor",
+      "state": "65.7",
+      "friendly_name": "InnerOS Pi01 Solar Status",
+      "source": "scratch_evidence",
+      "controllable": false
+    },
+    {
+      "entity_id": "sensor.inneros_pi01_solar_temperature",
+      "domain": "sensor",
+      "state": "41",
+      "friendly_name": "InnerOS Pi01 Solar Status",
+      "source": "scratch_evidence",
+      "controllable": false
+    }
+  ]
+}

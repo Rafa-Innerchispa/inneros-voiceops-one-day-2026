@@ -1,0 +1,23 @@
+# systemd user service — InnerOS VoiceOps on Intel host (.4)
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/voiceops.service.example ~/.config/systemd/user/voiceops.service
+#   # edit WorkingDirectory and ExecStart paths
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now voiceops.service
+
+[Unit]
+Description=InnerOS VoiceOps Web (Boson + governed HA actions)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/inneros/inneros-voiceops-one-day-2026
+EnvironmentFile=%h/.config/inneros/voiceops.env
+ExecStart=/opt/inneros/inneros-voiceops-one-day-2026/.venv/bin/python -m voiceops.webapp --host 0.0.0.0 --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -10,7 +10,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode
 from urllib.request import Request, urlopen
 
 from .adapters.local_amd import LocalAMDReasoner
@@ -293,8 +293,18 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
+    def _route_path(self) -> str:
+        path = self.path.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+        return path or "/"
+
+    def _query_params(self) -> dict[str, str]:
+        raw = self.path.split("?", 1)[1] if "?" in self.path else ""
+        parsed = parse_qs(raw, keep_blank_values=False)
+        return {key: values[-1] for key, values in parsed.items() if values}
+
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/healthz":
+        route = self._route_path()
+        if route == "/healthz":
             self._send_json(
                 {
                     "ok": True,
@@ -307,14 +317,18 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.path.split("?", 1)[0] == "/ws/higgs":
+        if route == "/ws/higgs":
             self._handle_ws_higgs()
             return
-        if self.path.startswith("/api/boson/token"):
-            from .adapters.boson_realtime import mint_client_secret
+        if route == "/api/boson/token":
+            from .adapters.boson_realtime import (
+                BOSON_OUTPUT_SAMPLE_RATE,
+                issue_relay_token,
+                probe_boson_ready,
+            )
 
-            minted = mint_client_secret(expires_in_seconds=600)
-            if not minted.get("ok"):
+            probe = probe_boson_ready()
+            if not probe.get("ok"):
                 self._send_json(
                     {
                         "mode": "browser_fallback",
@@ -322,40 +336,61 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                         "label": "BROWSER TTS FALLBACK",
                         "ready": True,
                         "ws_url": None,
-                        "sample_rate": 16000,
+                        "sample_rate": BOSON_OUTPUT_SAMPLE_RATE,
                         "sub_125ms_barge_in": True,
                         "provider": "Browser SpeechRecognition + speechSynthesis",
-                        "reason": minted.get("error", "Boson not configured"),
+                        "reason": probe.get("error", "Boson not configured"),
                     }
                 )
                 return
+            relay_token = issue_relay_token()
             self._send_json(
                 {
                     "mode": "higgs_relay",
-                    "token": minted["client_secret"],
-                    "expires_in_seconds": minted.get("expires_in_seconds", 600),
-                    "ws_url": minted.get("ws_url", "/ws/higgs"),
-                    "model": minted.get("model", "higgs-realtime"),
+                    "token": relay_token,
+                    "expires_in_seconds": 600,
+                    "ws_url": "/ws/higgs",
+                    "model": "higgs-realtime",
                     "voice": "default",
-                    "sample_rate": 16000,
+                    "sample_rate": BOSON_OUTPUT_SAMPLE_RATE,
                     "bilingual_support": "English / Spanish / Spanglish Code-Switching",
                     "sub_125ms_barge_in": True,
                     "provider": "Boson AI Higgs Realtime Speech-to-Speech",
                     "ready": True,
-                    "upstream": minted.get("upstream_ws_url"),
+                    "upstream": probe.get("ws_url"),
+                    "session_id": probe.get("session_id"),
                 }
             )
             return
-        if self.path == "/api/integrations/status":
+        if route == "/api/integrations/status":
             from .adapters.integration_status import collect_integration_status
 
             self._send_json(collect_integration_status())
             return
-        if self.path == "/api/telemetry":
+        if route == "/api/telemetry":
             from .governed_tools import inspect_operational_state
             self._send_json(inspect_operational_state("all", live_fluctuation=True))
             return
-        if self.path == "/api/boson/status":
+        if route == "/api/ha/controls":
+            from .governed_tools import list_home_assistant_controls
+
+            params = self._query_params()
+            controllable_only = params.get("controllable_only", "").lower() in {"1", "true", "yes"}
+            query = str(params.get("q") or params.get("query") or "")
+            try:
+                limit = int(params.get("limit") or 2000)
+            except ValueError:
+                limit = 2000
+            self._send_json(
+                list_home_assistant_controls(
+                    include_discovery=True,
+                    discovery_limit=max(1, min(limit, 5000)),
+                    controllable_only=controllable_only,
+                    query=query,
+                )
+            )
+            return
+        if route == "/api/boson/status":
             from .adapters.boson_realtime import boson_api_key
 
             has_key = bool(boson_api_key())
@@ -373,18 +408,18 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.path == "/api/state":
+        if route == "/api/state":
             state = self.store.snapshot()
             state["assemblyai_voice_agent_enabled"] = bool(self.server.live_voice_enabled)  # type: ignore[attr-defined]
             self._send_json(state)
             return
-        if self.path == "/api/evidence":
+        if route == "/api/evidence":
             self._send_json(self.store.evidence())
             return
-        if self.path == "/api/replay":
+        if route == "/api/replay":
             self._send_json(self.store.replay())
             return
-        if self.path == "/api/assemblyai/token":
+        if route == "/api/assemblyai/token":
             self._handle_voice_agent_token()
             return
         static_map = {
@@ -392,7 +427,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             "/app.js": ("app.js", "application/javascript; charset=utf-8"),
             "/styles.css": ("styles.css", "text/css; charset=utf-8"),
         }
-        item = static_map.get(self.path)
+        item = static_map.get(route)
         if item is None:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -410,8 +445,9 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self) -> None:  # noqa: N802
+        route = self._route_path()
         try:
-            if self.path == "/api/telephony/register-extension":
+            if route == "/api/telephony/register-extension":
                 from .governed_tools import get_operational_registry
                 payload = self._read_json()
                 ext = str(payload.get("extension") or payload.get("ext") or "").strip()
@@ -423,7 +459,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 new_ext = reg.register_extension(ext=ext, label=label, status="ONLINE")
                 self._send_json({"ok": True, "registered_extension": new_ext, "all_extensions": list(reg._registered_extensions)})
                 return
-            if self.path == "/api/telephony/unregister-extension":
+            if route == "/api/telephony/unregister-extension":
                 from .governed_tools import get_operational_registry
                 payload = self._read_json()
                 ext = str(payload.get("extension") or payload.get("ext") or "").strip()
@@ -434,20 +470,20 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 unreg_res = reg.unregister_extension(ext=ext)
                 self._send_json(unreg_res)
                 return
-            if self.path == "/api/inneros/analyze":
+            if route == "/api/inneros/analyze":
                 from .governed_tools import inneros_analyze_incident
                 payload = self._read_json()
                 query = str(payload.get("query") or "analiza la causa de la falla de ayer")
                 sub = str(payload.get("subsystem") or "all")
                 self._send_json(inneros_analyze_incident(query, sub))
                 return
-            if self.path == "/api/governed/inspect":
+            if route == "/api/governed/inspect":
                 from .governed_tools import inspect_operational_state
                 payload = self._read_json()
                 subsystem = str(payload.get("subsystem") or "all")
-                self._send_json(inspect_operational_state(subsystem))
+                self._send_json(inspect_operational_state(subsystem, mirror_evidence=True))
                 return
-            if self.path == "/api/governed/propose":
+            if route == "/api/governed/propose":
                 from .governed_tools import propose_governed_action
                 payload = self._read_json()
                 action_type = str(payload.get("action_type") or "restart_wifi_ap")
@@ -455,14 +491,14 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 params = payload.get("parameters")
                 self._send_json(propose_governed_action(action_type, target_subsystem, params))
                 return
-            if self.path == "/api/governed/approve":
+            if route == "/api/governed/approve":
                 from .governed_tools import submit_user_approval
                 payload = self._read_json()
                 proposal_id = str(payload.get("proposal_id") or "")
                 utterance = str(payload.get("utterance") or "")
                 self._send_json(submit_user_approval(proposal_id, utterance))
                 return
-            if self.path == "/api/governed/simulate":
+            if route == "/api/governed/simulate":
                 from .adapters.higgs_realtime import HiggsRealtimeSession
                 payload = self._read_json()
                 utterance = str(payload.get("utterance") or "Revisa el estado de la red y propone solucion")
@@ -477,7 +513,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 )
                 self._send_json(sim_res)
                 return
-            if self.path == "/api/boson/converse":
+            if route == "/api/boson/converse":
                 from .adapters.higgs_realtime import HiggsRealtimeSession
                 payload = self._read_json()
                 utterance = str(payload.get("utterance") or "")
@@ -486,14 +522,14 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
                 conv_res = session.converse(user_utterance=utterance, active_proposal_id=active_prop)
                 self._send_json(conv_res)
                 return
-            if self.path == "/api/reset":
+            if route == "/api/reset":
                 self._send_json(self.store.reset())
                 return
-            if self.path == "/api/intent":
+            if route == "/api/intent":
                 payload = self._read_json()
                 self._send_json(self.store.submit_intent(str(payload.get("transcript") or DEFAULT_INTENT)))
                 return
-            if self.path == "/api/approve":
+            if route == "/api/approve":
                 payload = self._read_json()
                 self._send_json(self.store.approve_pending(str(payload.get("transcript") or DEFAULT_APPROVAL)))
                 return
@@ -569,7 +605,7 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
         """RFC 6455 WebSocket relay to Boson Higgs Realtime upstream."""
         from urllib.parse import parse_qs, urlparse
 
-        from .adapters.boson_realtime import relay_browser_websocket
+        from .adapters.boson_realtime import boson_api_key, relay_browser_websocket, validate_relay_token
         from .websocket_server import compute_accept_key, encode_ws_frame, read_ws_frame
 
         sec_key = self.headers.get("Sec-WebSocket-Key", "")
@@ -578,10 +614,11 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             return
 
         parsed = urlparse(self.path)
-        client_secret = parse_qs(parsed.query).get("token", [""])[0].strip()
-        if not client_secret:
-            self.send_error(HTTPStatus.UNAUTHORIZED, "Missing Boson client secret token")
-            return
+        relay_token = parse_qs(parsed.query).get("token", [""])[0].strip()
+        if not relay_token or not validate_relay_token(relay_token):
+            if not boson_api_key():
+                self.send_error(HTTPStatus.UNAUTHORIZED, "Missing or expired Boson relay token")
+                return
 
         accept_val = compute_accept_key(sec_key)
         self.send_response(101, "Switching Protocols")
@@ -597,11 +634,23 @@ class VoiceOpsHandler(BaseHTTPRequestHandler):
             self.wfile.write(encode_ws_frame(opcode, payload))
             self.wfile.flush()
 
+        def _notify_tool_event(tool_name: str, arguments: dict[str, Any], output: dict[str, Any]) -> None:
+            payload = json.dumps(
+                {
+                    "type": "voiceops.tool_executed",
+                    "tool_name": tool_name,
+                    "arguments": arguments,
+                    "output": output,
+                },
+                ensure_ascii=False,
+            ).encode("utf-8")
+            write_frame(1, payload)
+
         try:
             relay_browser_websocket(
                 read_frame=read_frame,
                 write_frame=write_frame,
-                client_secret=client_secret,
+                on_tool_event=_notify_tool_event,
             )
         except Exception as exc:
             err = json.dumps(

@@ -21,12 +21,13 @@ You have native bilingual (Spanish/English) fluency and seamlessly handle techni
 
 KEY RULES:
 1. When asked about system status, call 'inspect_operational_state' to get live telemetry.
-2. If an anomaly is detected or the operator asks for an intervention, call 'propose_governed_action' to create a proposal.
-3. You MUST ask the operator for explicit verbal confirmation before executing any action.
-4. When the operator responds with confirmation or rejection, call 'submit_user_approval' with the proposal_id and their exact spoken words.
-5. You DO NOT invent approval decisions or permits. VoiceOps deterministic security handles validation fail-closed.
-6. Keep spoken responses concise, professional, and operational (1-3 sentences).
-7. If interrupted, stop talking immediately and respond to the new instruction."""
+2. When asked what can be controlled, call 'list_home_assistant_controls' before proposing actions.
+3. For real device actions (lights, switches, UniFi, alarm, scenes), use propose_governed_action with action_type='ha_service' and parameters (catalog_id or entity_id+verb or domain+service+entity_id).
+4. You MUST ask the operator for explicit verbal confirmation before executing any action.
+5. When the operator responds with confirmation or rejection, call 'submit_user_approval' with the proposal_id and their exact spoken words.
+6. You DO NOT invent approval decisions or permits. VoiceOps deterministic security handles validation fail-closed.
+7. Keep spoken responses concise, professional, and operational (1-3 sentences).
+8. If interrupted, stop talking immediately and respond to the new instruction."""
 
 
 @dataclass
@@ -277,25 +278,37 @@ class HiggsRealtimeSession:
         is_action = any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in action_verbs)
         if is_action:
             from ..governed_tools import propose_governed_action
-            action_type = "restart_wifi_ap"
-            target_sub = "network_wifi"
-            if any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["ap", "access point", "punto de acceso", "wifi", "poe", "solaryard", "yard"]):
+
+            action_type = "ha_service"
+            target_sub = "all"
+            parameters: dict[str, Any] = {}
+
+            if any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["cuarto", "room", "bedroom"]):
+                parameters = {"catalog_id": "restart_wifi_ap_room"}
+                target_sub = "network_wifi"
+            elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["ap", "access point", "punto de acceso", "wifi", "poe", "solaryard", "yard", "unifi"]):
                 action_type = "restart_wifi_ap"
                 target_sub = "network_wifi"
+            elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["alarma", "alarm", "arm", "desarm", "disarm"]):
+                parameters = {"entity_id": "alarm_control_panel.panel_home_ralphi_panel_home_ralphi", "verb": "disarm" if "desarm" in lower or "disarm" in lower else "arm_home"}
+                target_sub = "security_alarm"
+            elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["luz", "luces", "light", "switch", "interruptor"]):
+                parameters = {"verb": "off" if any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["apaga", "apagar", "off"]) else "on"}
+                target_sub = "dmx_lighting"
             elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["solar", "fase", "breaker", "inversor", "panel", "bateria"]):
                 action_type = "isolate_solar_phase"
                 target_sub = "solar_power"
             elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["sip", "pbx", "telefonia", "telephony", "troncal"]):
                 action_type = "reset_sip_trunk"
                 target_sub = "telephony"
-            elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["dmx", "luz", "luces", "iluminacion", "strobe"]):
+            elif any(re.search(r"\b" + re.escape(w) + r"\b", lower) for w in ["dmx", "iluminacion", "strobe", "escena", "scene"]):
                 action_type = "activate_dmx_emergency_scene"
                 target_sub = "dmx_lighting"
 
-            prop_res = propose_governed_action(action_type, target_sub)
+            prop_res = propose_governed_action(action_type, target_sub, parameters or None)
             rec = {
                 "tool_name": "propose_governed_action",
-                "arguments": {"action_type": action_type, "target_subsystem": target_sub},
+                "arguments": {"action_type": action_type, "target_subsystem": target_sub, "parameters": parameters or None},
                 "output": prop_res,
                 "timestamp": time.time(),
             }
@@ -457,7 +470,7 @@ class HiggsRealtimeSession:
         target_sub = max(scores, key=scores.get) if scores else "all"
 
         from ..governed_tools import inspect_operational_state
-        inspect_res = inspect_operational_state(target_sub)
+        inspect_res = inspect_operational_state(target_sub, mirror_evidence=True)
         rec = {
             "tool_name": "inspect_operational_state",
             "arguments": {"subsystem": target_sub},

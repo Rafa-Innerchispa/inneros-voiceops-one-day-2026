@@ -507,21 +507,15 @@ body {
   color: var(--text-secondary);
 }
 
-.voice-select-input {
-  font-family: var(--font-sans);
+.boson-voice-badge {
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
-  padding: 3px 8px;
+  font-weight: 600;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-light);
-  background: #ffffff;
-  color: var(--text-primary);
-  outline: none;
-  cursor: pointer;
-}
-
-.voice-select-input:focus {
-  border-color: var(--border-focus);
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .scenario-bar {
@@ -875,6 +869,146 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.partner-integrations-panel .partner-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.partner-card {
+  background: var(--bg-panel-sub);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.partner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.partner-head strong {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.partner-truth {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+}
+
+.partner-truth.real {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.partner-truth.fallback {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.partner-truth.not-connected {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.partner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.partner-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.partner-line span {
+  color: var(--text-secondary);
+}
+
+.partner-line code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.partner-open-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+.partner-open-btn.hidden {
+  display: none;
+}
+
+.ha-controls-panel .ha-controls-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.ha-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ha-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.ha-field-wide {
+  grid-column: 1 / -1;
+}
+
+.ha-field input,
+.ha-field select {
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  background: #fff;
+}
+
+.ha-controls-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ha-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ha-controls-actions {
+  display: grid;
+  gap: 6px;
 }
 
 .proposal-card {

@@ -111,8 +111,8 @@
           </div>
 
           <div class="voice-config-row">
-            <span class="voice-select-label">Voice Profile:</span>
-            <select id="voiceSelect" class="voice-select-input"></select>
+            <span class="voice-select-label">Audio Output:</span>
+            <span id="bosonVoiceBadge" class="boson-voice-badge">Boson Higgs Realtime · default voice</span>
           </div>
 
           <div class="scenario-bar">
@@ -269,25 +269,6 @@
                 </div>
               </div>
 
-              <!-- InstaCloud Edge Preview Card (Truth Transparency) -->
-              <div class="subsystem-card" id="cardInstaCloud">
-                <div class="subsystem-head">
-                  <div class="subsystem-title">
-                    <svg class="sub-svg" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-                    <strong>InstaCloud Edge Platform</strong>
-                  </div>
-                  <div class="head-badges">
-                    <span class="truth-badge unverified" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;">NOT CONNECTED</span>
-                    <span class="status-indicator" style="background:#e2e8f0; color:#64748b;">UNLINKED</span>
-                  </div>
-                </div>
-                <div class="subsystem-body">
-                  <div class="data-row"><span>Preview Target:</span><code>voiceops-boson-preview</code></div>
-                  <div class="data-row"><span>Connection Status:</span><strong>Unconfigured Sandbox</strong></div>
-                  <div class="provider-sub">Source: InstaCloud Provider (Truth Honest Policy)</div>
-                </div>
-              </div>
-
             </div>
           </div>
         </aside>
@@ -337,6 +318,75 @@
 
         <!-- Column 3: Safety Governance, Permit & HTR Receipt -->
         <aside class="col-governance">
+
+          <!-- Partner Integrations (Boson) -->
+          <div class="card panel partner-integrations-panel">
+            <div class="panel-header">
+              <h3>Partner Integrations</h3>
+              <span class="badge-pill">SPONSOR PLANE</span>
+            </div>
+            <div class="partner-grid">
+
+              <div class="partner-card" id="partnerBoson">
+                <div class="partner-head">
+                  <strong>Boson Higgs</strong>
+                  <span class="partner-truth fallback" id="bosonPartnerTruth">FALLBACK</span>
+                </div>
+                <div class="partner-body">
+                  <div class="partner-line"><span>Mode:</span><strong id="bosonPartnerMode">Browser STT/TTS</strong></div>
+                  <div class="partner-line"><span>Evidence:</span><strong id="bosonPartnerEvidence">Awaiting status</strong></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Home Assistant Control Picker -->
+          <div class="card panel ha-controls-panel">
+            <div class="panel-header">
+              <h3>Home Assistant Controls</h3>
+              <span id="haControlsTruth" class="status-badge pending">LOADING</span>
+            </div>
+            <p class="ha-controls-note">Selecciona una entidad y acción. VoiceOps creará una propuesta gobernada; luego autorizas por voz o con el botón.</p>
+            <div class="ha-controls-grid">
+              <label class="ha-field">
+                <span>Buscar</span>
+                <input id="haEntitySearch" type="search" placeholder="luz, unifi, alarma, switch…" autocomplete="off" />
+              </label>
+              <label class="ha-field">
+                <span>Dominio</span>
+                <select id="haDomainFilter">
+                  <option value="">Todos</option>
+                </select>
+              </label>
+              <label class="ha-field ha-field-wide">
+                <span>Entidad</span>
+                <select id="haEntitySelect" size="1">
+                  <option value="">Cargando entidades…</option>
+                </select>
+              </label>
+              <label class="ha-field">
+                <span>Acción</span>
+                <select id="haVerbSelect">
+                  <option value="on">Encender / Activar</option>
+                  <option value="off">Apagar</option>
+                  <option value="toggle">Alternar</option>
+                  <option value="press">Pulsar (botón)</option>
+                </select>
+              </label>
+            </div>
+            <div class="ha-controls-meta">
+              <span id="haEntityCount">0 entidades</span>
+              <label class="ha-toggle">
+                <input id="haControllableOnly" type="checkbox" />
+                Solo controlables
+              </label>
+            </div>
+            <div class="ha-controls-actions">
+              <button id="haRefreshBtn" class="btn btn-secondary btn-block" type="button">↻ Actualizar inventario</button>
+              <button id="haProposeBtn" class="btn btn-primary btn-block" type="button">Proponer acción gobernada</button>
+            </div>
+          </div>
 
           <!-- Active Proposal / Approval Card -->
           <div class="card panel">

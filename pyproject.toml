@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
 authors = [{name = "InnerChispa LLC"}]
-dependencies = []
+dependencies = [
+  "websocket-client>=1.8.0",
+]
 
 [project.optional-dependencies]
 assemblyai = ["assemblyai>=1.0.0"]
@@ -30,7 +32,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-voiceops = ["web/*.html", "web/*.css", "web/*.js"]
+voiceops = ["web/*.html", "web/*.css", "web/*.js", "data/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

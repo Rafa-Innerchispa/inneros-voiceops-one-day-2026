@@ -1,0 +1,25 @@
+# systemd user service — Boson VoiceOps on Intel host (.4)
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/inneros-voiceops-boson.service.example ~/.config/systemd/user/inneros-voiceops-boson.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now inneros-voiceops-boson.service
+#
+# Cloudflare tunnel: voiceopsboson.creatorcore.ai → 127.0.0.1:8875
+
+[Unit]
+Description=InnerOS VoiceOps Boson (Higgs S2S + governed HA actions)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/inneros/inneros_core/workspaces/inneros-voiceops-one-day-2026
+EnvironmentFile=%h/.config/inneros/voiceops.env
+Environment=PORT=8875
+ExecStart=%h/inneros/inneros_core/workspaces/inneros-voiceops-one-day-2026/.venv/bin/python -m voiceops.webapp --host 0.0.0.0 --port 8875
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

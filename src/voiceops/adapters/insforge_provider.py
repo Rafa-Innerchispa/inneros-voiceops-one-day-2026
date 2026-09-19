@@ -13,6 +13,40 @@ from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
+_LAST_MIRROR: dict[str, Any] = {
+    "remote_confirmed": False,
+    "event_id": None,
+    "event_type": None,
+    "mirrored_at": None,
+    "permit_id": None,
+    "proposal_id": None,
+    "action_type": None,
+    "result": None,
+}
+
+
+def last_insforge_mirror() -> dict[str, Any]:
+    return dict(_LAST_MIRROR)
+
+
+def _record_mirror(result: dict[str, Any], *, kind: str) -> None:
+    if not result.get("remote_confirmed"):
+        return
+    payload = result.get("event") or result.get("action_record") or result.get("session") or {}
+    _LAST_MIRROR.update(
+        {
+            "remote_confirmed": True,
+            "kind": kind,
+            "event_id": payload.get("event_id"),
+            "event_type": payload.get("event_type") or kind,
+            "mirrored_at": payload.get("timestamp") or payload.get("recorded_at") or payload.get("created_at"),
+            "permit_id": payload.get("permit_id"),
+            "proposal_id": payload.get("proposal_id"),
+            "action_type": payload.get("action_type"),
+            "result": payload.get("result"),
+        }
+    )
+
 
 @dataclass
 class InsForgeProvider:
@@ -42,27 +76,51 @@ class InsForgeProvider:
             return endpoint.split("/rest/v1", 1)[0] + "/rest/v1"
         return f"{endpoint}/rest/v1"
 
-    def health_status(self) -> dict[str, Any]:
+    def dashboard_url(self) -> str | None:
+        url = os.getenv("INSFORGE_DASHBOARD_URL", "").strip()
+        return url or None
+
+    def integration_status(self) -> dict[str, Any]:
+        """Honest partner status: REAL only after INSERT + READBACK with remote_confirmed."""
+        base: dict[str, Any] = {
+            "provider": "insforge",
+            "status": "NOT_CONNECTED",
+            "truth": "NOT_CONNECTED",
+            "remote_confirmed": False,
+            "last_event_id": None,
+            "last_event_type": None,
+            "last_mirrored_at": None,
+            "dashboard_url": self.dashboard_url(),
+            "rest_url": self._rest_base() if self.api_key else None,
+        }
         if not self.enabled:
-            return {"provider": "insforge", "status": "NOT_CONNECTED", "truth": "NOT_CONNECTED"}
+            base["note"] = "INNEROS_INSFORGE_ENABLED=false"
+            return base
         if not self.api_key:
+            base["error"] = "INSFORGE_API_KEY missing"
+            return base
+
+        last = last_insforge_mirror()
+        if last.get("remote_confirmed"):
             return {
-                "provider": "insforge",
-                "status": "NOT_CONNECTED",
-                "truth": "NOT_CONNECTED",
-                "error": "INSFORGE_API_KEY missing",
+                **base,
+                "status": "CONNECTED",
+                "truth": "REAL",
+                "remote_confirmed": True,
+                "last_event_id": last.get("event_id"),
+                "last_event_type": last.get("event_type"),
+                "last_mirrored_at": last.get("mirrored_at"),
+                "last_permit_id": last.get("permit_id"),
+                "evidence_note": "Evidence mirrored with insert + readback",
             }
-        try:
-            self._request("GET", "voice_sessions", params={"limit": "1"})
-            return {"provider": "insforge", "status": "CONNECTED", "truth": "LIVE", "rest_url": self._rest_base()}
-        except Exception as exc:
-            return {
-                "provider": "insforge",
-                "status": "DISCONNECTED",
-                "truth": "UNVERIFIED",
-                "error": str(exc),
-                "rest_url": self._rest_base(),
-            }
+
+        base["status"] = "CONFIGURED"
+        base["truth"] = "NOT_CONNECTED"
+        base["note"] = "Credentials present; awaiting first insert + readback evidence mirror."
+        return base
+
+    def health_status(self) -> dict[str, Any]:
+        return self.integration_status()
 
     def start_session(self, session_id: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.is_available():
@@ -76,12 +134,14 @@ class InsForgeProvider:
         try:
             inserted = self._insert_row("voice_sessions", payload)
             readback = self._readback_row("voice_sessions", inserted, match_key="session_id", match_value=session_id)
-            return {
+            result = {
                 "mirrored": bool(readback),
                 "remote_confirmed": bool(readback),
                 "provider": "insforge",
                 "session": readback or inserted,
             }
+            _record_mirror(result, kind="session_started")
+            return result
         except Exception as exc:
             logger.warning("InsForge session mirror failed: %s", exc)
             return {"mirrored": False, "provider": "insforge", "status": "remote_error", "error": str(exc)}
@@ -101,12 +161,14 @@ class InsForgeProvider:
         try:
             inserted = self._insert_row("timeline_events", event_record)
             readback = self._readback_row("timeline_events", inserted, match_key="event_id", match_value=event_id)
-            return {
+            result = {
                 "mirrored": bool(readback),
                 "remote_confirmed": bool(readback),
                 "provider": "insforge",
                 "event": readback or inserted,
             }
+            _record_mirror(result, kind=event_type)
+            return result
         except Exception as exc:
             logger.warning("InsForge event mirror failed: %s", exc)
             return {"mirrored": False, "provider": "insforge", "status": "remote_error", "error": str(exc)}
@@ -130,12 +192,14 @@ class InsForgeProvider:
                 match_key="permit_id",
                 match_value=permit_id,
             )
-            return {
+            result = {
                 "mirrored": bool(readback),
                 "remote_confirmed": bool(readback),
                 "provider": "insforge",
                 "action_record": readback or inserted,
             }
+            _record_mirror(result, kind=action_type)
+            return result
         except Exception as exc:
             logger.warning("InsForge action mirror failed: %s", exc)
             return {"mirrored": False, "provider": "insforge", "status": "remote_error", "error": str(exc)}

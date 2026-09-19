@@ -117,7 +117,7 @@ class TestHiggsRealtimeVoiceOps(unittest.TestCase):
         self.assertEqual(result["reason"], "explicit_denial_or_negation")
 
     def test_tool_dispatch_router(self) -> None:
-        self.assertEqual(len(HIGGS_TOOL_DEFINITIONS), 3)
+        self.assertGreaterEqual(len(HIGGS_TOOL_DEFINITIONS), 5)
         tool_names = [t["name"] for t in HIGGS_TOOL_DEFINITIONS]
         self.assertIn("inspect_operational_state", tool_names)
         self.assertIn("propose_governed_action", tool_names)
@@ -147,7 +147,7 @@ class TestHiggsRealtimeVoiceOps(unittest.TestCase):
             # 1. Test Session Update Config
             msg = session.get_session_update_message()
             self.assertEqual(msg["type"], "session.update")
-            self.assertEqual(len(msg["session"]["tools"]), 3)
+            self.assertGreaterEqual(len(msg["session"]["tools"]), 5)
             self.assertEqual(msg["session"]["input_audio_format"], "pcm16")
 
             # 2. Test Interruption / Barge-In event

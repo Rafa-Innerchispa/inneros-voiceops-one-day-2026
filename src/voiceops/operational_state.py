@@ -338,8 +338,9 @@ class OperationalStateRegistry:
         params = parameters or {}
         proposal_id = f"prop_{secrets.token_hex(4)}"
 
-        summary_map: dict[str, str] = {
-            "restart_wifi_ap": "Power-cycle PoE port for AP-SolarYard to clear channel interference and packet loss",
+        from .adapters.ha_actions import build_action_summary
+
+        demo_summary_map: dict[str, str] = {
             "switch_solar_bypass": "Engage utility bypass on Growatt 5kW inverter for maintenance stabilization",
             "isolate_solar_phase": "Isolate Substation Phase 2 to prevent thermal delta overcurrent",
             "reset_sip_trunk": "Re-negotiate SIP register on CNT Ecuador telephony trunk (Port 4321)",
@@ -347,10 +348,9 @@ class OperationalStateRegistry:
             "failover_lte_wan": "Force routing failover to Claro LTE backup cellular link",
         }
 
-        action_summary = summary_map.get(
-            action_type,
-            f"Execute governed operation '{action_type}' on subsystem '{target_subsystem}'",
-        )
+        action_summary = build_action_summary(action_type, {**params, "target_subsystem": target_subsystem})
+        if action_type in demo_summary_map and action_summary.startswith("No executable"):
+            action_summary = demo_summary_map[action_type]
 
         proposal = ActionProposal(
             action_type=action_type,
@@ -398,12 +398,13 @@ class OperationalStateRegistry:
 
         # Compute Human Time Returned (HTR)
         htr_savings_seconds: dict[str, float] = {
-            "restart_wifi_ap": 900.0,          # 15 min manual technician dispatch
-            "switch_solar_bypass": 2400.0,       # 40 min manual electrical panel lockout
-            "isolate_solar_phase": 2700.0,       # 45 min manual breaker isolation
-            "reset_sip_trunk": 1200.0,           # 20 min manual PBX CGI console intervention
-            "activate_dmx_emergency_scene": 600.0, # 10 min manual emergency switch run
-            "failover_lte_wan": 1800.0,          # 30 min router CLI configuration
+            "restart_wifi_ap": 900.0,
+            "ha_service": 900.0,
+            "switch_solar_bypass": 2400.0,
+            "isolate_solar_phase": 2700.0,
+            "reset_sip_trunk": 1200.0,
+            "activate_dmx_emergency_scene": 600.0,
+            "failover_lte_wan": 1800.0,
         }
         saved_sec = htr_savings_seconds.get(proposal.action_type, 1200.0)
 
@@ -415,11 +416,66 @@ class OperationalStateRegistry:
             evidence_basis=f"InnerOS Governed Execution benchmark for '{proposal.action_type}' at {self.site_name}",
         )
 
+        from .adapters.ha_actions import execute_ha_action, resolve_action_spec
+
+        params = proposal.payload.get("parameters") or {}
+        spec, resolve_error = resolve_action_spec(proposal.action_type, params)
+        execution_payload: dict[str, Any] | None = None
+        execution_status = "SUCCESS_DEMO_SAFE"
+        result_status: Literal["created", "blocked", "failed"] = "created"
+
+        legacy_demo_types = {
+            "restart_wifi_ap",
+            "switch_solar_bypass",
+            "isolate_solar_phase",
+            "reset_sip_trunk",
+            "activate_dmx_emergency_scene",
+            "failover_lte_wan",
+        }
+
+        if spec:
+            execution_payload = execute_ha_action(spec)
+            execution_status = str(execution_payload.get("execution_status") or "FAILED")
+            ha_error = str((execution_payload.get("step_results") or [{}])[0].get("error") or execution_payload.get("error") or "")
+            missing_ha_token = "HASS_TOKEN" in ha_error
+
+            if execution_payload.get("ok"):
+                if spec.demo_flag == "ap_solaryard_degraded" or proposal.action_type == "restart_wifi_ap":
+                    self.reset_ap_solaryard()
+            elif (
+                proposal.action_type in legacy_demo_types
+                and proposal.action_type != "ha_service"
+                and missing_ha_token
+            ):
+                execution_status = "SUCCESS_DEMO_SAFE"
+                execution_payload = {
+                    **execution_payload,
+                    "fallback": "demo_no_ha_token",
+                    "note": "Configure HASS_TOKEN on this host for live Home Assistant execution.",
+                }
+                if proposal.action_type == "restart_wifi_ap":
+                    self.reset_ap_solaryard()
+            else:
+                result_status = "failed"
+        elif resolve_error and proposal.action_type not in {
+            "switch_solar_bypass",
+            "isolate_solar_phase",
+            "reset_sip_trunk",
+            "activate_dmx_emergency_scene",
+            "failover_lte_wan",
+        }:
+            execution_status = "FAILED"
+            execution_payload = {"ok": False, "error": resolve_error}
+            result_status = "failed"
+
         result_details = {
             "proposal_id": proposal_id,
             "action_type": proposal.action_type,
             "target_subsystem": proposal.payload.get("target_subsystem", "unknown"),
-            "execution_status": "SUCCESS_DEMO_SAFE",
+            "parameters": params,
+            "execution_status": execution_status,
+            "ha_execution": execution_payload,
+            "resolve_error": resolve_error,
             "permit_id": permit.permit_id,
             "permit_signature_status": "VERIFIED_VALID",
             "htr_metric": asdict(htr_metric),
@@ -427,13 +483,10 @@ class OperationalStateRegistry:
             "executed_at": _now_iso(),
         }
 
-        if proposal.action_type == "restart_wifi_ap":
-            self.reset_ap_solaryard()
-
         result = ActionResult(
             action_id=action_id,
             action_type=proposal.action_type,
-            status="created",
+            status=result_status,
             details=result_details,
         )
 

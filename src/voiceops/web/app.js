@@ -35,30 +35,55 @@ let browserFallbackLabeled = false;
 let ttsBargeInGuardUntil = 0;
 let lastSpokenTranscript = "";
 let activeAudioSources = [];
+let higgsPlaybackCursor = 0;
+let higgsPlaybackPrimed = false;
+let higgsPcmQueue = [];
+let agentSpeakStartedAt = 0;
+let bargeInHoldFrames = 0;
+let recognitionPaused = false;
+const HIGGS_SAMPLE_RATE = 24000;
+const HIGGS_PLAYBACK_LEAD_SEC = 0.12;
+const BARGE_IN_VAD_THRESHOLD = 0.17;
+const BARGE_IN_FRAMES_REQUIRED = 5;
+const BARGE_IN_GRACE_MS = 700;
 let audioContext = null;
+let playbackContext = null;
+let higgsGainNode = null;
+let agentAudioFallbackTimer = null;
+let agentAudioReceived = false;
+let approvalInFlight = false;
+let haControlsCache = [];
+let haDomainCounts = {};
 let micStream = null;
 let analyserNode = null;
 let micDataArray = null;
 let scriptProcessorNode = null;
 let silentGainNode = null;
 let recognition = null;
-let selectedVoice = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   initWaveform();
-  initVoiceProfiles();
+  loadSpeechVoices();
   const htrEl = document.getElementById("htrCounter");
   if (htrEl) htrEl.textContent = `+${currentHtrTotal.toFixed(1)}`;
   fetchTelemetry();
   fetchBosonStatus();
   fetchIntegrationsStatus();
+  loadHaControls();
   setAudioSource("BROWSER_TTS_FALLBACK");
 
   // Continuously poll live telemetry every 2 seconds for real-time sensor updates
   setInterval(fetchTelemetry, 2000);
+  setInterval(fetchIntegrationsStatus, 5000);
 
   // Attach event listeners
   document.getElementById("refreshTelemetryBtn")?.addEventListener("click", fetchTelemetry);
+  document.getElementById("haRefreshBtn")?.addEventListener("click", () => loadHaControls(true));
+  document.getElementById("haProposeBtn")?.addEventListener("click", proposeSelectedHaAction);
+  document.getElementById("haEntitySearch")?.addEventListener("input", debounce(() => loadHaControls(false), 250));
+  document.getElementById("haDomainFilter")?.addEventListener("change", () => renderHaEntityOptions());
+  document.getElementById("haControllableOnly")?.addEventListener("change", () => loadHaControls(false));
+  document.getElementById("haEntitySelect")?.addEventListener("change", syncHaVerbOptions);
   document.getElementById("liveMicBtn")?.addEventListener("click", startLiveVoice);
   document.getElementById("stopMicBtn")?.addEventListener("click", stopLiveVoice);
   document.getElementById("sendManualBtn")?.addEventListener("click", sendManualUtterance);
@@ -75,56 +100,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("confirmBtn")?.addEventListener("click", () => {
-    if (activeProposalId) {
+    if (activeProposalId && !approvalInFlight) {
       submitApproval(activeProposalId, "Yes, authorize and execute the proposed operation now.");
     }
   });
 
   document.getElementById("rejectBtn")?.addEventListener("click", () => {
-    if (activeProposalId) {
-      submitApproval(activeProposalId, "Mmm maybe later, do not execute yet.");
+    if (activeProposalId && !approvalInFlight) {
+      submitApproval(activeProposalId, "No, reject and cancel this proposed action.");
     }
   });
 });
-
-// Initialize voice profiles with preferred male/natural voice
-function initVoiceProfiles() {
-  const select = document.getElementById("voiceSelect");
-  if (!select) return;
-
-  function populate() {
-    if (!window.speechSynthesis) return;
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) return;
-    select.innerHTML = "";
-    voices.forEach((v, i) => {
-      const opt = document.createElement("option");
-      opt.value = i;
-      opt.textContent = `${v.name} (${v.lang})`;
-      const vName = v.name.toLowerCase();
-      if (!selectedVoice && (vName.includes("male") || vName.includes("david") || vName.includes("jorge") || vName.includes("raul") || vName.includes("guy") || vName.includes("alonso") || vName.includes("miguel"))) {
-        opt.selected = true;
-        selectedVoice = v;
-      }
-      select.appendChild(opt);
-    });
-    if (!selectedVoice && voices.length > 0) {
-      selectedVoice = voices[0];
-    }
-  }
-
-  populate();
-  if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = populate;
-  }
-
-  select.addEventListener("change", () => {
-    if (window.speechSynthesis) {
-      const voices = window.speechSynthesis.getVoices();
-      selectedVoice = voices[select.value];
-    }
-  });
-}
 
 function setAudioSource(source) {
   audioSource = source;
@@ -135,85 +121,128 @@ function setAudioSource(source) {
   }
 }
 
-// Speak text clearly using SpeechSynthesis (BROWSER TTS FALLBACK when Boson relay unavailable)
+function clearAgentAudioFallbackTimer() {
+  if (agentAudioFallbackTimer) {
+    clearTimeout(agentAudioFallbackTimer);
+    agentAudioFallbackTimer = null;
+  }
+}
+
+// Speak agent reply aloud — guaranteed browser TTS (Boson handles reasoning/tools, not playback).
+async function speakAgentReply(text, options = {}) {
+  if (!text) return;
+  if (options.appendChat !== false) {
+    window.__agentReplyAppended = true;
+    appendChat("agent", text);
+  }
+  clearAgentAudioFallbackTimer();
+  pauseRecognition();
+  activeAudioSources.forEach((src) => {
+    try {
+      src.stop();
+    } catch (e) {}
+  });
+  activeAudioSources = [];
+  resetHiggsPlaybackSchedule();
+
+  setExecutionStep("Agent Speaking", "Speaking operational response aloud...");
+  await speakText(text, { fallback: true });
+  if (isVoiceActive) {
+    resumeRecognition();
+  }
+}
+
+async function speakAgentText(text, options = {}) {
+  await speakAgentReply(text, options);
+}
+
+function loadSpeechVoices() {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) {
+      resolve([]);
+      return;
+    }
+    const voices = window.speechSynthesis.getVoices();
+    if (voices && voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+    const onVoices = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onVoices);
+      resolve(window.speechSynthesis.getVoices());
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onVoices);
+    window.setTimeout(() => resolve(window.speechSynthesis.getVoices()), 300);
+  });
+}
+
+function pickEnglishVoice(voices) {
+  if (!voices || voices.length === 0) return null;
+  const preferred = ["google us english", "microsoft david", "microsoft mark", "microsoft aria", "english united states", "en-us"];
+  const lowerNames = voices.map((v) => `${v.name} ${v.lang}`.toLowerCase());
+  for (const hint of preferred) {
+    const idx = lowerNames.findIndex((n) => n.includes(hint));
+    if (idx >= 0) return voices[idx];
+  }
+  return voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("en")) || voices[0];
+}
+
+// Browser speechSynthesis — guaranteed audible output for agent replies.
 async function speakText(text, options = {}) {
   if (!text || !window.speechSynthesis) return;
-  if (higgsPcmActive && bosonTransportMode === "higgs_relay" && options.fallback !== true) {
+  if (bosonTransportMode === "higgs_relay" && options.fallback !== true) {
     return;
   }
 
-  setAudioSource(bosonTransportMode === "higgs_relay" && higgsPcmActive ? "HIGGS" : "BROWSER_TTS_FALLBACK");
-  if (audioSource === "BROWSER_TTS_FALLBACK" && !browserFallbackLabeled) {
-    browserFallbackLabeled = true;
-    appendChat("system", "BROWSER TTS FALLBACK — using browser speechSynthesis for audible output.");
-  }
+  setAudioSource("SPEAKER");
 
-  try {
-    if (audioContext && audioContext.state === "suspended") {
-      await audioContext.resume();
-    }
-    ttsBargeInGuardUntil = Date.now() + 1800;
-    window.speechSynthesis.cancel();
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const lower = text.toLowerCase();
-    const isSpanish = /[áéíóúñ¿¡]/.test(lower) || /\b(hola|cómo|alarma|servidor|inversor|red|sí|autorizo|falla|guayaquil|temperatura)\b/.test(lower);
-    const isFrench = /\b(bonjour|salut|serveur|merci|qui)\b/.test(lower);
-    const isGerman = /\b(hallo|server|danke|wer)\b/.test(lower);
-
-    if (isSpanish) {
-      utterance.lang = "es-ES";
-    } else if (isFrench) {
-      utterance.lang = "fr-FR";
-    } else if (isGerman) {
-      utterance.lang = "de-DE";
-    } else {
-      utterance.lang = "en-US";
-    }
-
-    const voices = window.speechSynthesis.getVoices();
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    } else if (voices && voices.length > 0) {
-      const prefix = isSpanish ? "es" : isFrench ? "fr" : isGerman ? "de" : "en";
-      const matching = voices.find((v) => v.lang.startsWith(prefix));
-      if (matching) utterance.voice = matching;
-    }
-
-    utterance.rate = 1.02;
-    utterance.pitch = 0.95;
-
-    utterance.onstart = () => {
-      isAudioSpeaking = true;
-      document.getElementById("audioPlayingTag")?.classList.remove("hidden");
-      document.getElementById("voiceOrb")?.classList.add("active");
-    };
-
-    utterance.onend = () => {
-      isAudioSpeaking = false;
-      document.getElementById("audioPlayingTag")?.classList.add("hidden");
-      if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
-      if (isVoiceActive && recognition) {
-        try {
-          recognition.start();
-        } catch (e) {}
+  return new Promise(async (resolve) => {
+    try {
+      if (audioContext && audioContext.state === "suspended") {
+        await audioContext.resume();
       }
-    };
+      ttsBargeInGuardUntil = Date.now() + 1800;
+      window.speechSynthesis.cancel();
+      await new Promise((r) => setTimeout(r, 100));
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
 
-    utterance.onerror = () => {
-      isAudioSpeaking = false;
-      document.getElementById("audioPlayingTag")?.classList.add("hidden");
-      if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
-    };
+      const voices = await loadSpeechVoices();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      const enVoice = pickEnglishVoice(voices);
+      if (enVoice) utterance.voice = enVoice;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
-    window.speechSynthesis.speak(utterance);
-  } catch (err) {
-    console.error("SpeechSynthesis error:", err);
-  }
+      const finish = () => {
+        isAudioSpeaking = false;
+        document.getElementById("audioPlayingTag")?.classList.add("hidden");
+        if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+        resolve();
+      };
+
+      utterance.onstart = () => {
+        isAudioSpeaking = true;
+        document.getElementById("audioPlayingTag")?.classList.remove("hidden");
+        document.getElementById("voiceOrb")?.classList.add("active");
+      };
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      window.speechSynthesis.speak(utterance);
+      window.setTimeout(() => {
+        if (!isAudioSpeaking && window.speechSynthesis.pending === false && window.speechSynthesis.speaking === false) {
+          finish();
+        }
+      }, Math.max(4000, text.length * 80));
+    } catch (err) {
+      console.error("SpeechSynthesis error:", err);
+      resolve();
+    }
+  });
 }
 
 // Update Active Execution Step Ticker
@@ -235,9 +264,10 @@ function initSpeechRecognition() {
   const rec = new SpeechRec();
   rec.continuous = true;
   rec.interimResults = false;
-  rec.lang = "es-EC";
+  rec.lang = "en-US";
 
   rec.onresult = (event) => {
+    if (approvalInFlight) return;
     const lastIndex = event.results.length - 1;
     const transcript = event.results[lastIndex][0].transcript.trim();
     if (!transcript || transcript.length <= 1) {
@@ -250,7 +280,8 @@ function initSpeechRecognition() {
     lastSpokenTranscript = transcript;
     window.__lastSpeechAt = now;
     console.log("🎤 Voice recognized:", transcript);
-    if (isAudioSpeaking) {
+    if (isAgentAudioPlaying()) {
+      if (transcript.length < 8) return;
       triggerInstantBargeIn();
     }
     appendChat("user", transcript);
@@ -262,7 +293,7 @@ function initSpeechRecognition() {
   };
 
   rec.onend = () => {
-    if (isVoiceActive) {
+    if (isVoiceActive && !recognitionPaused && !isAgentAudioPlaying()) {
       try {
         rec.start();
       } catch (e) {}
@@ -272,7 +303,22 @@ function initSpeechRecognition() {
   return rec;
 }
 
-// Fetch ephemeral token & initialize WebSocket connection for Higgs Realtime S2S
+function updateBosonVoiceBadge(voice, mode) {
+  const badge = document.getElementById("bosonVoiceBadge");
+  if (!badge) return;
+  if (mode === "higgs_relay") {
+    badge.textContent = `Boson Higgs Realtime · ${voice || "default"} voice`;
+    badge.className = "boson-voice-badge";
+  } else {
+    badge.textContent = "Browser TTS fallback (Boson relay offline)";
+    badge.className = "boson-voice-badge";
+    badge.style.background = "#fef3c7";
+    badge.style.borderColor = "#fcd34d";
+    badge.style.color = "#92400e";
+  }
+}
+
+// Fetch relay token & initialize WebSocket connection for Higgs Realtime S2S
 async function initBosonSession() {
   try {
     const res = await fetch("/api/boson/token");
@@ -286,135 +332,296 @@ async function initBosonSession() {
     if (bosonTransportMode === "browser_fallback" || !data.token || !data.ws_url || legacyFakeToken) {
       bosonTransportMode = "browser_fallback";
       setAudioSource("BROWSER_TTS_FALLBACK");
+      updateBosonVoiceBadge(null, "browser_fallback");
       appendChat("system", data.label || "BROWSER TTS FALLBACK — using browser SpeechRecognition + speechSynthesis.");
       setExecutionStep("Browser Voice Fallback", data.reason || "Boson relay not configured on server.");
-      return;
+      return false;
     }
     setAudioSource("HIGGS");
+    updateBosonVoiceBadge(data.voice || "default", "higgs_relay");
 
     ephemeralToken = data.token;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}${data.ws_url}?token=${encodeURIComponent(data.token)}`;
 
-    higgsWebSocket = new WebSocket(wsUrl);
+    return await new Promise((resolve) => {
+      higgsWebSocket = new WebSocket(wsUrl);
 
-    higgsWebSocket.onopen = () => {
-      console.log("⚡ Higgs Realtime WebSocket connected:", wsUrl);
-      setExecutionStep("Higgs WebSocket Live", "Stream active · Sub-50ms Barge-in enabled");
-    };
+      higgsWebSocket.onopen = () => {
+        console.log("⚡ Higgs Realtime WebSocket connected:", wsUrl);
+        setExecutionStep("Higgs WebSocket Live", "Stream active · Sub-50ms Barge-in enabled");
+        resolve(true);
+      };
 
-    higgsWebSocket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        handleHiggsServerEvent(msg);
-      } catch (err) {
-        console.warn("WS message parse error:", err);
-      }
-    };
+      higgsWebSocket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleHiggsServerEvent(msg);
+        } catch (err) {
+          console.warn("WS message parse error:", err);
+        }
+      };
 
-    higgsWebSocket.onerror = (err) => {
-      console.warn("Higgs WebSocket notice:", err);
-    };
+      higgsWebSocket.onerror = (err) => {
+        console.warn("Higgs WebSocket notice:", err);
+      };
 
-    higgsWebSocket.onclose = () => {
-      console.log("Higgs WebSocket connection closed");
-      if (isVoiceActive && bosonTransportMode === "higgs_relay") {
-        bosonTransportMode = "browser_fallback";
-        setAudioSource("BROWSER_TTS_FALLBACK");
-        appendChat("system", "Higgs relay closed — falling back to browser STT/TTS.");
-      }
-    };
+      higgsWebSocket.onclose = () => {
+        console.log("Higgs WebSocket connection closed");
+        if (isVoiceActive && bosonTransportMode === "higgs_relay") {
+          bosonTransportMode = "browser_fallback";
+          setAudioSource("BROWSER_TTS_FALLBACK");
+          updateBosonVoiceBadge(null, "browser_fallback");
+          appendChat("system", "Higgs relay closed — falling back to browser STT/TTS.");
+        }
+      };
+
+      setTimeout(() => {
+        if (higgsWebSocket && higgsWebSocket.readyState !== WebSocket.OPEN) {
+          bosonTransportMode = "browser_fallback";
+          setAudioSource("BROWSER_TTS_FALLBACK");
+          updateBosonVoiceBadge(null, "browser_fallback");
+          resolve(false);
+        }
+      }, 8000);
+    });
   } catch (err) {
     bosonTransportMode = "browser_fallback";
     setAudioSource("BROWSER_TTS_FALLBACK");
+    updateBosonVoiceBadge(null, "browser_fallback");
     console.warn("Ephemeral token negotiation notice:", err);
+    return false;
   }
+}
+
+function sendUtteranceToHiggs(text) {
+  if (bosonTransportMode !== "higgs_relay") return false;
+  if (!higgsWebSocket || higgsWebSocket.readyState !== WebSocket.OPEN) return false;
+  if (isAgentAudioPlaying()) {
+    cancelAllAudioPlayback();
+    higgsWebSocket.send(JSON.stringify({ type: "response.cancel" }));
+  }
+  resetHiggsPlaybackSchedule();
+  pauseRecognition();
+  higgsWebSocket.send(
+    JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    })
+  );
+  higgsWebSocket.send(JSON.stringify({ type: "response.create" }));
+  setExecutionStep("Higgs S2S Live", "Boson Realtime generating spoken response...");
+  return true;
 }
 
 // Handle incoming server events from Higgs Realtime S2S stream
 function handleHiggsServerEvent(event) {
   const type = event.type || "";
 
-  if (type === "session.created") {
+  if (type === "session.created" || type === "session.updated") {
     console.log("Higgs Session active:", event.session?.id);
     document.getElementById("turnStatus").textContent = "Higgs Realtime Streaming";
     document.getElementById("turnStatus").className = "status-badge active";
-  } else if (type === "response.audio_transcript.delta") {
+    setAudioSource("HIGGS");
+  } else if (
+    type === "response.output_audio_transcript.delta" ||
+    type === "response.audio_transcript.delta" ||
+    type === "response.output_text.delta"
+  ) {
     const text = event.delta || "";
     if (text) {
+      window.__higgsTranscriptBuffer = (window.__higgsTranscriptBuffer || "") + text;
+      setExecutionStep("Agent Speaking", "Boson Higgs Realtime audio streaming...");
+    }
+  } else if (
+    type === "response.output_audio_transcript.done" ||
+    type === "response.audio_transcript.done"
+  ) {
+    const text = event.transcript || window.__higgsTranscriptBuffer || "";
+    window.__higgsTranscriptBuffer = "";
+    if (text && !window.__agentReplyAppended) {
       appendChat("agent", text);
-      setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-      if (!higgsPcmActive) {
-        clearTimeout(window.__higgsTranscriptSpeakTimer);
-        window.__higgsTranscriptSpeakTimer = setTimeout(() => {
-          if (!higgsPcmActive) speakText(text, { fallback: true });
-        }, 450);
-      }
     }
-    if (event.tool_records && event.tool_records.length > 0) {
-      event.tool_records.forEach((rec) => {
-        recordToolCall(rec.tool_name, rec.arguments, rec.output, 24);
-      });
-    }
-    if (event.proposal) {
-      activeProposalId = event.proposal.proposal_id;
-      showProposalCard(activeProposalId, event.proposal.summary, event.subsystem);
-    }
-    if (event.approval_result) {
-      handleApprovalExecution(event.approval_result);
-    }
-    if (event.subsystem) {
-      highlightDashboardCard(event.subsystem);
-    }
-  } else if (type === "response.audio.delta") {
-    // Real PCM16 binary audio streaming to Web Audio API buffer queue
+    window.__agentReplyAppended = false;
+  } else if (type === "response.output_audio.delta" || type === "response.audio.delta") {
+    // Boson Realtime streams 24 kHz PCM16 mono (response.output_audio.delta)
     const base64Audio = event.delta || "";
-    if (base64Audio) {
+    if (base64Audio && !(bosonTransportMode === "higgs_relay" && isVoiceActive)) {
+      if (!higgsPcmActive) {
+        agentSpeakStartedAt = Date.now();
+        pauseRecognition();
+      }
       higgsPcmActive = true;
       setAudioSource("HIGGS");
-      playPCM16AudioChunk(base64Audio);
+      isAudioSpeaking = true;
+      document.getElementById("audioPlayingTag")?.classList.remove("hidden");
+      playPCM16AudioChunk(base64Audio, HIGGS_SAMPLE_RATE);
     }
-  } else if (type === "response.audio.done" || type === "response.done") {
+  } else if (
+    type === "response.output_audio.done" ||
+    type === "response.audio.done" ||
+    type === "response.done"
+  ) {
     higgsPcmActive = false;
-  } else if (type === "input_audio_buffer.speech_started") {
-    higgsPcmActive = false;
-    cancelAllAudioPlayback();
+    markAgentPlaybackEnding();
+  } else if (type === "voiceops.tool_executed") {
+    handleVoiceopsToolExecuted(event);
   } else if (type === "error" && event.mode === "browser_fallback") {
     bosonTransportMode = "browser_fallback";
     appendChat("system", event.label || "BROWSER TTS FALLBACK");
   }
 }
 
-// Web Audio API: Play PCM16 Mono 16kHz audio chunk through hardware destination
-async function playPCM16AudioChunk(base64Data) {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+function ensurePlaybackGraph() {
+  if (!playbackContext) {
+    playbackContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
   }
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
+  if (!higgsGainNode) {
+    higgsGainNode = playbackContext.createGain();
+    higgsGainNode.gain.value = 1.0;
+    higgsGainNode.connect(playbackContext.destination);
+  }
+  return higgsGainNode;
+}
+
+function isAgentAudioPlaying() {
+  if (activeAudioSources.length > 0) return true;
+  if (!playbackContext || !higgsPlaybackPrimed) return false;
+  return higgsPlaybackCursor > playbackContext.currentTime + 0.04;
+}
+
+function pauseRecognition() {
+  if (!recognition || !isVoiceActive || recognitionPaused) return;
+  recognitionPaused = true;
+  try {
+    recognition.stop();
+  } catch (e) {}
+}
+
+function resumeRecognition() {
+  if (!recognition || !isVoiceActive || !recognitionPaused || approvalInFlight) return;
+  if (isAgentAudioPlaying()) return;
+  recognitionPaused = false;
+  window.setTimeout(() => {
+    if (isVoiceActive && !recognitionPaused && !isAgentAudioPlaying() && !approvalInFlight) {
+      try {
+        recognition.start();
+      } catch (e) {}
+    }
+  }, 300);
+}
+
+function setApprovalButtonsEnabled(enabled) {
+  const confirmBtn = document.getElementById("confirmBtn");
+  const rejectBtn = document.getElementById("rejectBtn");
+  if (confirmBtn) confirmBtn.disabled = !enabled;
+  if (rejectBtn) rejectBtn.disabled = !enabled;
+}
+
+function closeProposalUI(message, variant = "rejected") {
+  activeProposalId = null;
+  setApprovalButtonsEnabled(true);
+  document.getElementById("manualApprovalActions").style.display = "none";
+  const badge = document.getElementById("approvalBadge");
+  if (variant === "executed") {
+    badge.textContent = "PERMIT ISSUED";
+    badge.className = "status-badge active";
+  } else {
+    badge.textContent = "REJECTED — NO CHANGE";
+    badge.className = "status-badge";
+  }
+  const card = document.getElementById("proposalCard");
+  if (card && message) {
+    card.className = "proposal-card";
+    card.innerHTML = message;
+  }
+}
+
+function markAgentPlaybackEnding() {
+  window.setTimeout(() => {
+    if (isAgentAudioPlaying()) return;
+    isAudioSpeaking = false;
+    higgsPcmActive = false;
+    document.getElementById("audioPlayingTag")?.classList.add("hidden");
+    if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+    clearAgentAudioFallbackTimer();
+    if (bosonTransportMode === "higgs_relay") {
+      resumeRecognition();
+    }
+  }, 120);
+}
+
+function handleVoiceopsToolExecuted(event) {
+  const toolName = event.tool_name || "unknown_tool";
+  const args = event.arguments || {};
+  const output = event.output || {};
+  recordToolCall(toolName, args, output, 0);
+
+  if (toolName === "inspect_operational_state") {
+    const subsystem = args.subsystem || "all";
+    fetchTelemetry();
+    highlightDashboardCard(subsystem === "all" ? "solar_power" : subsystem);
+    setExecutionStep("Live Telemetry Read", `inspect_operational_state(${subsystem}) — panel synced.`);
+  } else if (toolName === "propose_governed_action" && output.proposal_id) {
+    activeProposalId = output.proposal_id;
+    showProposalCard(output.proposal_id, output.summary || "Governed action proposed.", output.target_subsystem);
+    highlightDashboardCard(output.target_subsystem);
+  } else if (toolName === "submit_user_approval") {
+    handleApprovalExecution(output);
+    fetchTelemetry();
   }
 
+  fetchIntegrationsStatus();
+}
+
+function resetHiggsPlaybackSchedule() {
+  higgsPlaybackCursor = 0;
+  higgsPlaybackPrimed = false;
+  higgsPcmQueue = [];
+}
+
+function syncHiggsPlaybackSchedule() {
+  const now = playbackContext.currentTime;
+  if (!higgsPlaybackPrimed || higgsPlaybackCursor < now) {
+    higgsPlaybackCursor = now + HIGGS_PLAYBACK_LEAD_SEC;
+    higgsPlaybackPrimed = true;
+  }
+}
+
+function schedulePCM16ChunkSync(base64Data, sampleRate = HIGGS_SAMPLE_RATE) {
   try {
     const binary = atob(base64Data);
     const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binary.charCodeAt(i);
+    const alignedLen = len - (len % 2);
+    if (alignedLen < 2) return;
+
+    const sampleCount = alignedLen / 2;
+    const float32Array = new Float32Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+      const lo = binary.charCodeAt(i * 2);
+      const hi = binary.charCodeAt(i * 2 + 1);
+      let sample = lo | (hi << 8);
+      if (sample >= 0x8000) sample -= 0x10000;
+      float32Array[i] = sample / 32768.0;
     }
 
-    const int16Array = new Int16Array(bytes.buffer);
-    const float32Array = new Float32Array(int16Array.length);
-    for (let i = 0; i < int16Array.length; i++) {
-      float32Array[i] = int16Array[i] / 32768.0;
-    }
+    syncHiggsPlaybackSchedule();
 
-    const audioBuffer = audioContext.createBuffer(1, float32Array.length, 16000);
+    const audioBuffer = playbackContext.createBuffer(1, float32Array.length, sampleRate);
     audioBuffer.getChannelData(0).set(float32Array);
 
-    const source = audioContext.createBufferSource();
+    const source = playbackContext.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
+    source.connect(higgsGainNode);
+
+    const startAt = higgsPlaybackCursor;
+    const duration = float32Array.length / sampleRate;
+    higgsPlaybackCursor += duration;
 
     isAudioSpeaking = true;
     document.getElementById("audioPlayingTag")?.classList.remove("hidden");
@@ -422,22 +629,41 @@ async function playPCM16AudioChunk(base64Data) {
 
     source.onended = () => {
       activeAudioSources = activeAudioSources.filter((s) => s !== source);
-      if (activeAudioSources.length === 0) {
-        isAudioSpeaking = false;
-        document.getElementById("audioPlayingTag")?.classList.add("hidden");
-        if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
+      if (!isAgentAudioPlaying()) {
+        markAgentPlaybackEnding();
       }
     };
 
     activeAudioSources.push(source);
-    source.start();
+    source.start(startAt);
   } catch (err) {
     console.error("PCM16 playback error:", err);
   }
 }
 
+function flushHiggsPcmQueue() {
+  while (higgsPcmQueue.length > 0) {
+    const chunk = higgsPcmQueue.shift();
+    schedulePCM16ChunkSync(chunk.base64Data, chunk.sampleRate);
+  }
+}
+
+// Web Audio API: schedule PCM16 chunks back-to-back (fixes choppy/overlap playback)
+async function playPCM16AudioChunk(base64Data, sampleRate = HIGGS_SAMPLE_RATE) {
+  if (bosonTransportMode === "higgs_relay" && isVoiceActive) {
+    return;
+  }
+  ensurePlaybackGraph();
+  if (playbackContext.state === "suspended") {
+    await playbackContext.resume();
+  }
+  higgsPcmQueue.push({ base64Data, sampleRate });
+  flushHiggsPcmQueue();
+}
+
 // Cancel All Active Audio Playback (<50ms hardware stop)
 function cancelAllAudioPlayback() {
+  clearAgentAudioFallbackTimer();
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
@@ -447,6 +673,9 @@ function cancelAllAudioPlayback() {
     } catch (e) {}
   });
   activeAudioSources = [];
+  resetHiggsPlaybackSchedule();
+  higgsPcmActive = false;
+  bargeInHoldFrames = 0;
   isAudioSpeaking = false;
   document.getElementById("audioPlayingTag")?.classList.add("hidden");
   if (!isVoiceActive) document.getElementById("voiceOrb")?.classList.remove("active");
@@ -457,22 +686,25 @@ function triggerInstantBargeIn() {
   cancelAllAudioPlayback();
 
   if (higgsWebSocket && higgsWebSocket.readyState === WebSocket.OPEN) {
-    higgsWebSocket.send(
-      JSON.stringify({
-        type: "input_audio_buffer.speech_started",
-        timestamp: Date.now(),
-      })
-    );
+    higgsWebSocket.send(JSON.stringify({ type: "response.cancel" }));
   }
 
   setExecutionStep("Barge-In (<50ms)", "Higgs audio stream cut off immediately upon voice detection!");
   console.log("⚡ [Barge-In Triggered]: Realtime audio cut off in <50ms.");
+  resumeRecognition();
 }
 
 // Start Live Voice Session with real Microphone, Speech Recognition & Audio Pipeline
 async function startLiveVoice() {
   try {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    ensurePlaybackGraph();
+    if (playbackContext.state === "suspended") {
+      await playbackContext.resume();
+    }
+
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
     if (audioContext.state === "suspended") {
       await audioContext.resume();
     }
@@ -505,50 +737,29 @@ async function startLiveVoice() {
       }
       const avg = sum / inputData.length;
 
-      // Realtime Hardware VAD: ignore echo bleed right after TTS starts.
       if (Date.now() < ttsBargeInGuardUntil) {
         return;
       }
-      const vadThreshold = audioSource === "BROWSER_TTS_FALLBACK" ? 0.12 : 0.05;
-      if (avg > vadThreshold && isAudioSpeaking) {
+      if (audioSource === "BROWSER_TTS_FALLBACK" && avg > 0.12 && isAudioSpeaking) {
         triggerInstantBargeIn();
-      }
-
-      if (
-        bosonTransportMode === "higgs_relay" &&
-        higgsWebSocket &&
-        higgsWebSocket.readyState === WebSocket.OPEN
-      ) {
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = "";
-        for (let j = 0; j < bytes.byteLength; j++) {
-          binary += String.fromCharCode(bytes[j]);
-        }
-        const b64 = btoa(binary);
-        higgsWebSocket.send(
-          JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: b64,
-          })
-        );
       }
     };
 
     // Connect Boson transport before deciding STT path.
     await initBosonSession();
 
-    // Browser STT drives commands (HTTP converse). PCM WS is optional parallel path.
+    // Browser STT captures utterance; higgs_relay sends text to Boson WS for real S2S audio output.
     if (!recognition) {
       recognition = initSpeechRecognition();
+    }
+    if (bosonTransportMode !== "higgs_relay") {
+      bosonTransportMode = "browser_fallback";
+      setAudioSource("BROWSER_TTS_FALLBACK");
     }
     if (recognition) {
       try {
         recognition.start();
       } catch (e) {}
-    }
-    if (bosonTransportMode !== "higgs_relay") {
-      bosonTransportMode = "browser_fallback";
-      setAudioSource("BROWSER_TTS_FALLBACK");
     }
 
     isVoiceActive = true;
@@ -560,13 +771,18 @@ async function startLiveVoice() {
     document.getElementById("turnStatus").textContent = "Streaming Live Audio";
     document.getElementById("turnStatus").className = "status-badge active";
 
-    setExecutionStep("Microphone Live", "Listening to your voice. Speak any operational command or query...");
-    appendChat("system", "Microphone PCM16 stream connected to Boson AI Higgs Realtime. Speak freely.");
-
-    // Spoken greeting (always audible via current audio source)
-    const greetingText = "Hi, I'm here to help you. VoiceOps is online and monitoring all Guayaquil systems.";
-    appendChat("agent", greetingText);
-    await speakText(greetingText, { fallback: true });
+    setExecutionStep("Microphone Live", "Speak in English — ask about solar, network, cameras, or site status.");
+    if (bosonTransportMode === "higgs_relay") {
+      appendChat(
+        "system",
+        "Boson Higgs Realtime live — speak in English. Voice replies use Boson audio; panel data via live tools."
+      );
+    } else {
+      appendChat("system", "Browser STT/TTS fallback active — Boson relay unavailable.");
+      const greetingText = "Hi, I'm here to help you. VoiceOps is online and monitoring all Guayaquil systems.";
+      appendChat("agent", greetingText);
+      await speakText(greetingText, { fallback: true });
+    }
   } catch (err) {
     console.error("Microphone access error:", err);
     alert("Microphone permission was not granted. Please allow microphone access in your browser to test live speech.");
@@ -577,7 +793,10 @@ async function startLiveVoice() {
 // Stop Live Voice Session
 function stopLiveVoice() {
   isVoiceActive = false;
+  approvalInFlight = false;
+  recognitionPaused = false;
   cancelAllAudioPlayback();
+  setApprovalButtonsEnabled(true);
 
   if (recognition) {
     try {
@@ -616,15 +835,15 @@ function stopLiveVoice() {
   appendChat("system", "Live voice session closed.");
 }
 
-// Process spoken/typed command through Boson AI reasoning engine
+// Process spoken/typed command — reliable panel data via /api/boson/converse, voice via Boson PCM + TTS fallback.
 async function processSpokenCommand(text) {
-  if (isAudioSpeaking && Date.now() >= ttsBargeInGuardUntil) {
+  if (isAgentAudioPlaying()) {
     triggerInstantBargeIn();
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  setExecutionStep("Boson S2S Reasoning", `"${text.slice(0, 40)}..."`);
+  setExecutionStep("VoiceOps Reasoning", `"${text.slice(0, 40)}..."`);
 
-  // Text commands always use HTTP converse (reliable tools + spoken reply). WS is PCM-only.
   try {
     const t0 = performance.now();
     const res = await fetch("/api/boson/converse", {
@@ -639,6 +858,7 @@ async function processSpokenCommand(text) {
       data.tool_records.forEach((rec) => {
         recordToolCall(rec.tool_name, rec.arguments, rec.output, latMs);
       });
+      fetchTelemetry();
     }
 
     if (data.proposal) {
@@ -651,23 +871,21 @@ async function processSpokenCommand(text) {
     }
 
     const reply = data.reply || "Operational query processed.";
-    appendChat("agent", reply);
-    setExecutionStep("Agent Speaking", "Spoken response delivered with live telemetry.");
-    speakText(reply, { fallback: true });
-
     if (data.subsystem) {
       highlightDashboardCard(data.subsystem);
     }
+
+    await speakAgentReply(reply);
+    fetchIntegrationsStatus();
   } catch (err) {
     console.error("Converse error:", err);
+    appendChat("system", "Request failed — check server connection.");
   }
 }
 
 // Handle approval execution UI update
 function handleApprovalExecution(app) {
   if (app.status === "EXECUTED") {
-    document.getElementById("approvalBadge").textContent = "PERMIT ISSUED";
-    document.getElementById("approvalBadge").className = "status-badge active";
     document.getElementById("auditPermitId").textContent = app.permit_id;
     document.getElementById("auditActionId").textContent = app.action_id;
     document.getElementById("auditSignature").textContent = "[HMAC-SHA256: VALID]";
@@ -677,20 +895,21 @@ function handleApprovalExecution(app) {
     currentHtrTotal += savedMin;
     document.getElementById("htrCounter").textContent = `+${currentHtrTotal.toFixed(1)}`;
 
-    document.getElementById("proposalCard").innerHTML = `
-      <div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
-      <p style="margin-top:4px;">Single-Use Permit: <code>${app.permit_id}</code> · HTR: +${savedMin} min</p>
-    `;
-    document.getElementById("manualApprovalActions").style.display = "none";
-    activeProposalId = null;
+    closeProposalUI(
+      `<div style="color:#059669; font-weight:600;">✓ Action Executed & Audited</div>
+      <p style="margin-top:4px;">Single-Use Permit: <code>${app.permit_id}</code> · HTR: +${savedMin} min</p>`,
+      "executed"
+    );
+    setExecutionStep("Operation Executed", `Permit ${app.permit_id} verified; evidence sealed.`);
     fetchTelemetry();
   } else {
-    document.getElementById("approvalBadge").textContent = "BLOCKED (FAIL-CLOSED)";
-    document.getElementById("approvalBadge").className = "status-badge pending";
-    document.getElementById("proposalCard").innerHTML = `
-      <div style="color:#dc2626; font-weight:600;">✕ Approval Denied / Ambiguous</div>
-      <p style="margin-top:4px;">Reason: <code>${app.reason}</code> (Fail-Closed Safety Protection)</p>
-    `;
+    const reason = app.reason || "explicit_rejection";
+    closeProposalUI(
+      `<div style="color:#64748b; font-weight:600;">✕ Action Rejected — No Changes Applied</div>
+      <p style="margin-top:4px;">Reason: <code>${reason}</code>. The infrastructure remains unchanged.</p>`,
+      "rejected"
+    );
+    setExecutionStep("Action Rejected", "Proposal closed. No governed action was executed.");
   }
 }
 
@@ -829,11 +1048,90 @@ async function fetchBosonStatus() {
     if (!res.ok) return;
     const data = await res.json();
     console.log("Boson AI Higgs Realtime Status:", data);
+    updateBosonVoiceBadge(data.voice || "default", data.mode || "browser_fallback");
     if (data.mode === "browser_fallback") {
       setAudioSource("BROWSER_TTS_FALLBACK");
     }
   } catch (err) {
     console.error("Boson status check error:", err);
+  }
+}
+
+function partnerTruthClass(truth) {
+  const normalized = String(truth || "NOT_CONNECTED").toUpperCase();
+  if (normalized === "REAL" || normalized === "LIVE") return "real";
+  if (normalized === "FALLBACK" || normalized === "BROWSER_TTS_FALLBACK") return "fallback";
+  return "not-connected";
+}
+
+function setPartnerTruth(elementId, truth) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const label = String(truth || "NOT_CONNECTED").toUpperCase();
+  el.textContent = label === "LIVE" ? "REAL" : label;
+  el.className = `partner-truth ${partnerTruthClass(truth)}`;
+}
+
+function renderPartnerIntegrations(data) {
+  const partners = data.partner_integrations || {};
+  const boson = partners.boson || data.boson || {};
+  const insforge = partners.insforge || data.insforge || {};
+  const instacloud = partners.instacloud || data.instacloud || {};
+
+  setPartnerTruth("bosonPartnerTruth", boson.truth || (boson.ready ? "REAL" : "FALLBACK"));
+  const bosonMode = document.getElementById("bosonPartnerMode");
+  const bosonEvidence = document.getElementById("bosonPartnerEvidence");
+  if (bosonMode) {
+    bosonMode.textContent = boson.mode === "higgs_relay" ? "Higgs Realtime S2S" : "Browser STT/TTS Fallback";
+  }
+  if (bosonEvidence) {
+    bosonEvidence.textContent = boson.evidence_note || (boson.ready ? "Realtime voice session" : "Browser fallback active");
+  }
+
+  setPartnerTruth("insforgePartnerTruth", insforge.truth || "NOT_CONNECTED");
+  const insEvent = document.getElementById("insforgeLastEvent");
+  const insConfirmed = document.getElementById("insforgeRemoteConfirmed");
+  const insBtn = document.getElementById("insforgeOpenBtn");
+  if (insEvent) {
+    insEvent.textContent = insforge.last_event_id || "—";
+  }
+  if (insConfirmed) {
+    const confirmed = insforge.remote_confirmed === true;
+    insConfirmed.textContent = confirmed ? "YES ✓" : "NO";
+    insConfirmed.className = confirmed ? "text-success" : "";
+  }
+  if (insBtn) {
+    const url = insforge.dashboard_url || insforge.rest_url;
+    if (url) {
+      insBtn.href = url;
+      insBtn.classList.remove("hidden");
+    } else {
+      insBtn.classList.add("hidden");
+    }
+  }
+
+  setPartnerTruth("instacloudPartnerTruth", instacloud.truth || "NOT_CONNECTED");
+  const icDeploy = document.getElementById("instacloudDeployment");
+  const icStatus = document.getElementById("instacloudDeployStatus");
+  const icBtn = document.getElementById("instacloudOpenBtn");
+  if (icDeploy) {
+    icDeploy.textContent = instacloud.deployment_id || "voiceops-boson-preview";
+  }
+  if (icStatus) {
+    if (instacloud.truth === "REAL") {
+      icStatus.textContent = instacloud.deployment_status || "HEALTHY";
+    } else {
+      icStatus.textContent = instacloud.status || "NOT_CONNECTED";
+    }
+  }
+  if (icBtn) {
+    const url = instacloud.preview_url || instacloud.dashboard_url;
+    if (url && instacloud.truth === "REAL") {
+      icBtn.href = url;
+      icBtn.classList.remove("hidden");
+    } else {
+      icBtn.classList.add("hidden");
+    }
   }
 }
 
@@ -845,6 +1143,7 @@ async function fetchIntegrationsStatus() {
     if (data.audio_source) {
       setAudioSource(data.audio_source);
     }
+    renderPartnerIntegrations(data);
     console.log("Integration status:", data);
   } catch (err) {
     console.error("Integration status error:", err);
@@ -860,8 +1159,7 @@ async function triggerScenario(type) {
   } else if (type === "barge_in") {
     setExecutionStep("2. Long Speech In-Progress", "Higgs streaming audio parameters; testing human voice interruption...");
     const longReport = "Executing full operational stream: Node Guayaquil running grid sync at 120.6 volts, frequency 60 hertz, phase A drawing 6.11 amps, battery storage optimal at 52.4 volts...";
-    appendChat("agent", longReport);
-    speakText(longReport);
+    speakAgentText(longReport, { appendChat: false });
 
     setTimeout(() => {
       triggerInstantBargeIn();
@@ -905,6 +1203,12 @@ async function triggerScenario(type) {
 
 // Submit Verbal Approval
 async function submitApproval(proposalId, utterance) {
+  if (approvalInFlight) return;
+  approvalInFlight = true;
+  setApprovalButtonsEnabled(false);
+  cancelAllAudioPlayback();
+  pauseRecognition();
+
   try {
     const t0 = performance.now();
     const res = await fetch("/api/governed/approve", {
@@ -920,18 +1224,226 @@ async function submitApproval(proposalId, utterance) {
 
     if (data.status === "EXECUTED") {
       const savedMin = Math.round((data.htr_seconds_returned / 60) * 10) / 10;
-      const agentConfirmation = `Action executed under single-use permit ${data.permit_id}. Cryptographic receipt recorded in Audit Fabric and +${savedMin} minutes of human time returned.`;
-      appendChat("agent", agentConfirmation);
-      setExecutionStep("Operation Executed", `Permit ${data.permit_id} verified; evidence sealed.`);
-      speakText(agentConfirmation);
+      const agentConfirmation = `Action executed under single-use permit ${data.permit_id}. Cryptographic receipt recorded in Audit Fabric and plus ${savedMin} minutes of human time returned.`;
+      await speakAgentReply(agentConfirmation);
     } else {
-      const agentRejection = `Utterance was ambiguous or negative ('${data.reason}'). Under fail-closed security policy, the action remains BLOCKED.`;
-      appendChat("agent", agentRejection);
-      setExecutionStep("Action Blocked", "Fail-closed safety gate rejected ambiguous confirmation.");
-      speakText(agentRejection);
+      await speakAgentReply(
+        "Understood. The proposed action was rejected. No changes will be made to the infrastructure."
+      );
     }
   } catch (err) {
     console.error("Submit approval error:", err);
+    closeProposalUI(
+      `<div style="color:#dc2626; font-weight:600;">Approval request failed</div>
+      <p style="margin-top:4px;">Check server connection and try again.</p>`,
+      "rejected"
+    );
+    appendChat("system", "Approval submission failed — proposal cleared so you can continue.");
+  } finally {
+    approvalInFlight = false;
+    setApprovalButtonsEnabled(true);
+    recognitionPaused = false;
+    if (isVoiceActive && !isAgentAudioPlaying()) {
+      try {
+        recognition?.start();
+      } catch (e) {}
+    }
+  }
+}
+
+function debounce(fn, waitMs) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), waitMs);
+  };
+}
+
+const HA_VERB_OPTIONS = {
+  light: [
+    { value: "on", label: "Encender" },
+    { value: "off", label: "Apagar" },
+    { value: "toggle", label: "Alternar" },
+  ],
+  switch: [
+    { value: "on", label: "Encender" },
+    { value: "off", label: "Apagar" },
+    { value: "toggle", label: "Alternar" },
+  ],
+  button: [{ value: "press", label: "Pulsar / Reiniciar" }],
+  input_button: [{ value: "press", label: "Pulsar" }],
+  scene: [{ value: "on", label: "Activar escena" }],
+  script: [{ value: "run", label: "Ejecutar script" }],
+  automation: [{ value: "trigger", label: "Disparar automatización" }],
+  cover: [
+    { value: "open", label: "Abrir" },
+    { value: "close", label: "Cerrar" },
+    { value: "stop", label: "Detener" },
+  ],
+  lock: [
+    { value: "lock", label: "Cerrar cerradura" },
+    { value: "unlock", label: "Abrir cerradura" },
+  ],
+  alarm_control_panel: [
+    { value: "arm_home", label: "Armar (home)" },
+    { value: "arm_away", label: "Armar (away)" },
+    { value: "disarm", label: "Desarmar" },
+  ],
+  fan: [
+    { value: "on", label: "Encender" },
+    { value: "off", label: "Apagar" },
+    { value: "toggle", label: "Alternar" },
+  ],
+  media_player: [
+    { value: "play", label: "Reproducir" },
+    { value: "pause", label: "Pausar" },
+    { value: "stop", label: "Detener" },
+  ],
+  unifi: [{ value: "press", label: "Reiniciar / Pulsar" }],
+};
+
+async function loadHaControls(forceRefresh = false) {
+  const truthEl = document.getElementById("haControlsTruth");
+  const countEl = document.getElementById("haEntityCount");
+  const search = document.getElementById("haEntitySearch")?.value?.trim() || "";
+  const controllableOnly = document.getElementById("haControllableOnly")?.checked;
+  if (truthEl) {
+    truthEl.textContent = forceRefresh ? "REFRESH" : "LOADING";
+    truthEl.className = "status-badge pending";
+  }
+  try {
+    const params = new URLSearchParams({ limit: "2000" });
+    if (search) params.set("q", search);
+    if (controllableOnly) params.set("controllable_only", "true");
+    const res = await fetch(`/api/ha/controls?${params.toString()}`);
+    const data = await res.json();
+    haControlsCache = Array.isArray(data.entities) ? data.entities : [];
+    haDomainCounts = data.domain_counts || {};
+    populateHaDomainFilter();
+    renderHaEntityOptions();
+    if (truthEl) {
+      truthEl.textContent = data.truth || "UNVERIFIED";
+      truthEl.className = `status-badge ${data.truth === "LIVE" ? "live" : data.truth === "SNAPSHOT" ? "pending" : "fallback"}`;
+    }
+    if (countEl) {
+      const ctrl = data.controllable_count ?? haControlsCache.filter((e) => e.controllable).length;
+      countEl.textContent = `${data.entity_count ?? haControlsCache.length} entidades · ${ctrl} controlables`;
+    }
+  } catch (err) {
+    console.error("HA controls load failed:", err);
+    if (truthEl) {
+      truthEl.textContent = "ERROR";
+      truthEl.className = "status-badge fallback";
+    }
+    if (countEl) countEl.textContent = "No se pudo cargar inventario HA";
+  }
+}
+
+function populateHaDomainFilter() {
+  const select = document.getElementById("haDomainFilter");
+  if (!select) return;
+  const current = select.value;
+  const domains = Object.keys(haDomainCounts).sort();
+  select.innerHTML = `<option value="">Todos (${haControlsCache.length})</option>`;
+  for (const domain of domains) {
+    const opt = document.createElement("option");
+    opt.value = domain;
+    opt.textContent = `${domain} (${haDomainCounts[domain]})`;
+    select.appendChild(opt);
+  }
+  if (current && domains.includes(current)) select.value = current;
+}
+
+function renderHaEntityOptions() {
+  const select = document.getElementById("haEntitySelect");
+  const domainFilter = document.getElementById("haDomainFilter")?.value || "";
+  if (!select) return;
+  const rows = haControlsCache.filter((row) => !domainFilter || row.domain === domainFilter);
+  select.innerHTML = "";
+  if (!rows.length) {
+    select.innerHTML = `<option value="">Sin resultados</option>`;
+    return;
+  }
+  const groups = {};
+  for (const row of rows) {
+    const domain = row.domain || "other";
+    if (!groups[domain]) groups[domain] = [];
+    groups[domain].push(row);
+  }
+  for (const domain of Object.keys(groups).sort()) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = domain;
+    for (const row of groups[domain]) {
+      const opt = document.createElement("option");
+      opt.value = row.entity_id;
+      const ctrl = row.controllable ? "⚡" : "👁";
+      opt.textContent = `${ctrl} ${row.friendly_name || row.entity_id} (${row.state ?? "?"})`;
+      opt.dataset.domain = row.domain || "";
+      opt.dataset.controllable = row.controllable ? "1" : "0";
+      optgroup.appendChild(opt);
+    }
+    select.appendChild(optgroup);
+  }
+  syncHaVerbOptions();
+}
+
+function syncHaVerbOptions() {
+  const entitySelect = document.getElementById("haEntitySelect");
+  const verbSelect = document.getElementById("haVerbSelect");
+  const proposeBtn = document.getElementById("haProposeBtn");
+  if (!entitySelect || !verbSelect) return;
+  const option = entitySelect.selectedOptions[0];
+  const domain = option?.dataset?.domain || "";
+  const controllable = option?.dataset?.controllable === "1";
+  const verbs = HA_VERB_OPTIONS[domain] || [{ value: "on", label: "Activar" }, { value: "off", label: "Desactivar" }];
+  verbSelect.innerHTML = verbs.map((v) => `<option value="${v.value}">${v.label}</option>`).join("");
+  if (proposeBtn) proposeBtn.disabled = !entitySelect.value || !controllable;
+}
+
+async function proposeSelectedHaAction() {
+  const entityId = document.getElementById("haEntitySelect")?.value;
+  const verb = document.getElementById("haVerbSelect")?.value;
+  const option = document.getElementById("haEntitySelect")?.selectedOptions?.[0];
+  if (!entityId || !verb) return;
+  if (option?.dataset?.controllable !== "1") {
+    appendChat("system", "Esta entidad es solo lectura en el panel. Elige una marcada con ⚡.");
+    return;
+  }
+  const label = option?.textContent?.replace(/^⚡\s*/, "").split(" (")[0] || entityId;
+  const domain = option?.dataset?.domain || entityId.split(".")[0];
+  const subsystemMap = {
+    light: "dmx_lighting",
+    switch: "dmx_lighting",
+    alarm_control_panel: "security_alarm",
+    button: "network_wifi",
+    unifi: "network_wifi",
+  };
+  const targetSubsystem = subsystemMap[domain] || "all";
+  try {
+    const res = await fetch("/api/governed/propose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action_type: "ha_service",
+        target_subsystem: targetSubsystem,
+        parameters: {
+          entity_id: entityId,
+          verb,
+          label,
+          target_subsystem: targetSubsystem,
+        },
+      }),
+    });
+    const data = await res.json();
+    if (data.proposal_id) {
+      activeProposalId = data.proposal_id;
+      showProposalCard(data.proposal_id, data.summary || label, targetSubsystem);
+      appendChat("system", `Propuesta ${data.proposal_id} creada para ${label}. Autoriza por voz o con el botón verde.`);
+      recordToolCall("propose_governed_action", { entity_id: entityId, verb }, data, 0);
+    }
+  } catch (err) {
+    console.error("HA propose failed:", err);
+    appendChat("system", "No se pudo crear la propuesta gobernada.");
   }
 }
 
@@ -948,6 +1460,7 @@ function showProposalCard(proposalId, summary, subsystem) {
     <div style="font-size:11px; color:#64748b;">Requires explicit verbal confirmation from the human operator.</div>
   `;
   document.getElementById("manualApprovalActions").style.display = "flex";
+  setApprovalButtonsEnabled(true);
 }
 
 // Record Tool Call in Ticker
@@ -1012,7 +1525,7 @@ function highlightDashboardCard(subsystem) {
     servers_rack: "cardNetwork",
     security_alarm: "cardAlarm",
     video_surveillance: "cardCameras",
-    instacloud: "cardInstaCloud",
+    instacloud: "partnerInstacloud",
   };
   const cardId = cardMap[subsystem];
   if (cardId) {

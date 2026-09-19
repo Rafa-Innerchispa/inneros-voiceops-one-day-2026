@@ -59,6 +59,10 @@ def test_insforge_non_blocking_provider() -> None:
     ins = InsForgeProvider()
     assert not ins.is_available()
 
+    status = ins.integration_status()
+    assert status["truth"] == "NOT_CONNECTED"
+    assert status["remote_confirmed"] is False
+
     res_session = ins.start_session("test-session-001")
     assert res_session["mirrored"] is False
     assert res_session["status"] == "disabled_or_unconfigured"
